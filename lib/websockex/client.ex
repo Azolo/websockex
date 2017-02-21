@@ -127,8 +127,19 @@ defmodule WebSockex.Client do
     end
   end
 
-  def start_link(module, state) do
-    :proc_lib.start_link(__MODULE__, :init, [module, state])
+  def start_link(url, module, state) do
+    case URI.parse(url) do
+      %URI{host: host, port: port, scheme: protocol} = uri
+      when is_nil(host)
+      when is_nil(port)
+      when not protocol in ["ws", "wss"] ->
+        # TODO: Make this better
+        {:error, {:bad_uri, uri}}
+      %URI{} = uri ->
+        :proc_lib.start_link(__MODULE__, :init, [uri, module, state])
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   def cast(socket, message) do
@@ -136,9 +147,11 @@ defmodule WebSockex.Client do
     :ok
   end
 
-  def init(module, state) do
+  def init(uri, module, state) do
+    {:ok, conn} = WebSockex.Conn.connect(uri)
+
     :proc_lib.init_ack({:ok, self()})
-    websocket_loop(%{module: module, module_state: state})
+    websocket_loop(%{conn: conn, module: module, module_state: state})
   end
 
   defp websocket_loop(state) do

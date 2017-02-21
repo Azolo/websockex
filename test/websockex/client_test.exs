@@ -4,8 +4,8 @@ defmodule WebSockex.ClientTest do
   defmodule TestClient do
     use WebSockex.Client
 
-    def start_link(state) do
-      WebSockex.Client.start_link(__MODULE__, state)
+    def start_link(url, state) do
+      WebSockex.Client.start_link(url, __MODULE__, state)
     end
 
     def handle_cast({:pid_reply, pid}, state) do
@@ -25,9 +25,13 @@ defmodule WebSockex.ClientTest do
   end
 
   setup do
-    {:ok, pid} = TestClient.start_link(:ok)
+    {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
 
-    [pid: pid]
+    on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+
+    {:ok, pid} = TestClient.start_link(url, :ok)
+
+    [pid: pid, url: url]
   end
 
   test "handle changes state", context do
