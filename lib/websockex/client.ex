@@ -136,7 +136,7 @@ defmodule WebSockex.Client do
         # TODO: Make this better
         {:error, {:bad_uri, uri}}
       %URI{} = uri ->
-        :proc_lib.start_link(__MODULE__, :init, [uri, module, state])
+        :proc_lib.start_link(__MODULE__, :init, [self(), uri, module, state])
       {:error, error} ->
         {:error, error}
     end
@@ -147,26 +147,52 @@ defmodule WebSockex.Client do
     :ok
   end
 
-  def init(uri, module, state) do
+  def init(parent, uri, module, state) do
+    # OTP stuffs
+    debug = :sys.debug_options([])
+
     {:ok, conn} = WebSockex.Conn.connect(uri)
 
     :proc_lib.init_ack({:ok, self()})
-    websocket_loop(%{conn: conn, module: module, module_state: state})
+    websocket_loop(parent, debug, %{conn: conn, module: module, module_state: state})
   end
 
-  defp websocket_loop(state) do
+  ## OTP Stuffs
+
+  def system_continue(parent, debug, state) do
+    websocket_loop(parent, debug, state)
+  end
+
+  def system_terminate(reason, _, _, _) do
+    exit reason
+  end
+
+  def system_get_state(state) do
+    {:ok, state, state}
+  end
+
+  def system_replace_state(fun, state) do
+    new_state = fun.(state)
+    {:ok, new_state, new_state}
+  end
+
+  defp websocket_loop(parent, debug, state) do
     receive do
+      {:system, from, req} ->
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
       {:"$websockex_cast", msg} ->
-        common_handle({:handle_cast, msg}, state)
+        new_mod_state = common_handle({:handle_cast, msg}, state)
+        websocket_loop(parent, debug, %{state | module_state: new_mod_state})
       msg ->
-        common_handle({:handle_info, msg}, state)
+        new_mod_state = common_handle({:handle_info, msg}, state)
+        websocket_loop(parent, debug, %{state | module_state: new_mod_state})
     end
   end
 
   defp common_handle({function, msg}, state) do
     case apply(state.module, function, [msg, state.module_state]) do
           {:ok, new_state} ->
-            websocket_loop(%{state | module_state: new_state})
+            new_state
           {:reply, _message, _new_state} ->
             raise "Not Implemented"
           {:close, _close_message, _new_state} ->

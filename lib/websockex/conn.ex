@@ -25,9 +25,13 @@ defmodule WebSockex.Conn do
          :ok <- conn.conn_mod.send(socket, handshake),
          conn <- Map.put(conn, :socket, socket),
          {:ok, response} <- wait_for_response(conn),
-         {:ok, headers, rest} <- decode_response(response),
+         {:ok, headers, _rest} <- decode_response(response),
          :ok <- validate_handshake(headers, key) do
            {:ok, conn}
+         else
+           {:error, _} = error ->
+             :proc_lib.init_ack(error)
+             exit(error)
          end
   end
 

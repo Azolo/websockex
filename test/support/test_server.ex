@@ -12,8 +12,13 @@ defmodule WebSockex.TestServer do
     ref = make_ref()
     port = get_port()
     url = "ws://localhost:#{port}/ws"
-    with {:ok, _} <- Plug.Adapters.Cowboy.http(__MODULE__, [], [dispatch: dispatch(pid), port: port, ref: ref]),
-    do: {:ok, {ref, url}}
+    case Plug.Adapters.Cowboy.http(__MODULE__, [], [dispatch: dispatch(pid), port: port, ref: ref]) do
+      {:ok, _} ->
+        {:ok, {ref, url}}
+      {:error, :eaddrinuse} ->
+        IO.puts "Address #{port} in use!"
+        start(pid)
+    end
   end
 
   def shutdown(ref) do
@@ -31,7 +36,7 @@ defmodule WebSockex.TestServer do
   end
 
   defp start_ports_agent do
-    Agent.start(fn -> 55000 end, name: __MODULE__)
+    Agent.start(fn -> Enum.random(50_000..63_000) end, name: __MODULE__)
   end
 end
 
