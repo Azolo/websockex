@@ -21,12 +21,15 @@ defmodule WebSockex.Conn do
                        request: build_full_path(uri)}
 
     with {:ok, socket} <- open_socket(conn),
+         conn <- Map.put(conn, :socket, socket),
          {handshake, key} <- build_handshake(conn),
          :ok <- conn.conn_mod.send(socket, handshake),
-         conn <- Map.put(conn, :socket, socket),
          {:ok, response} <- wait_for_response(conn),
-         {:ok, headers, _rest} <- decode_response(response),
+         {:ok, headers, rest} <- decode_response(response),
          :ok <- validate_handshake(headers, key) do
+           unless "" == rest, do: send(self(), {:tcp, conn.socket, rest})
+
+           :inet.setopts(conn.socket, active: true)
            {:ok, conn}
          else
            {:error, _} = error ->

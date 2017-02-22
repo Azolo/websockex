@@ -151,9 +151,10 @@ defmodule WebSockex.Client do
     # OTP stuffs
     debug = :sys.debug_options([])
 
+
     {:ok, conn} = WebSockex.Conn.connect(uri)
 
-    :proc_lib.init_ack({:ok, self()})
+    :proc_lib.init_ack(parent, {:ok, self()})
     websocket_loop(parent, debug, %{conn: conn, module: module, module_state: state})
   end
 
@@ -176,23 +177,21 @@ defmodule WebSockex.Client do
     {:ok, new_state, new_state}
   end
 
-  defp websocket_loop(parent, debug, state) do
+  defp websocket_loop(parent, debug, %{conn: conn} = state) do
     receive do
       {:system, from, req} ->
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
       {:"$websockex_cast", msg} ->
-        new_mod_state = common_handle({:handle_cast, msg}, state)
-        websocket_loop(parent, debug, %{state | module_state: new_mod_state})
+        common_handle(parent, debug, {:handle_cast, msg}, state)
       msg ->
-        new_mod_state = common_handle({:handle_info, msg}, state)
-        websocket_loop(parent, debug, %{state | module_state: new_mod_state})
+        common_handle(parent, debug, {:handle_info, msg}, state)
     end
   end
 
-  defp common_handle({function, msg}, state) do
+  defp common_handle(parent, debug, {function, msg}, state) do
     case apply(state.module, function, [msg, state.module_state]) do
           {:ok, new_state} ->
-            new_state
+            websocket_loop(parent, debug, %{state | module_state: new_state})
           {:reply, _message, _new_state} ->
             raise "Not Implemented"
           {:close, _close_message, _new_state} ->
