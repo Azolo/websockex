@@ -1,52 +1,125 @@
 defmodule WebSockex.Conn do
-  @handshake_guid "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
   defstruct conn_mod: :gen_tcp,
             host: nil,
             port: nil,
-            request: nil,
+            path: nil,
+            query: nil,
+            extra_headers: [],
+            transport: :tcp,
             socket: nil
 
   @type socket :: :gen_tcp.socket
+  @type header :: {field :: String.t, value :: String.t}
+  @type transport :: :tcp
+
+  @type connection_options :: {:extra_headers, [header]}
+
   @type t :: %__MODULE__{conn_mod: :gen_tcp,
                          host: String.t,
                          port: non_neg_integer,
-                         request: String.t,
+                         path: String.t | nil,
+                         query: String.t | nil,
+                         extra_headers: [header],
+                         transport: transport,
                          socket: socket}
-            
-  @spec connect(URI.t) :: {:ok, __MODULE__.t}
-  def connect(uri) do
+
+  @doc """
+  Sends data using the `conn_mod` module.
+  """
+  @spec socket_send(__MODULE__.t, binary) :: :ok | {:error, reason :: term}
+  def socket_send(conn, message) do
+    conn.conn_mod.send(conn.socket, message)
+  end
+
+  @doc """
+  Opens a socket to a uri and returns a conn struct.
+  """
+  def open_socket(uri, opts \\ []) do
     conn = %__MODULE__{host: uri.host,
                        port: uri.port,
-                       request: build_full_path(uri)}
+                       path: uri.path,
+                       query: uri.query,
+                       extra_headers: Keyword.get(opts, :extra_headers, [])}
 
-    with {:ok, socket} <- open_socket(conn),
-         conn <- Map.put(conn, :socket, socket),
-         {handshake, key} <- build_handshake(conn),
-         :ok <- conn.conn_mod.send(socket, handshake),
-         {:ok, response} <- wait_for_response(conn),
-         {:ok, headers, rest} <- decode_response(response),
-         :ok <- validate_handshake(headers, key) do
-           unless "" == rest, do: send(self(), {:tcp, conn.socket, rest})
+    case :gen_tcp.connect(String.to_charlist(conn.host),
+                          conn.port,
+                          [:binary, active: false, packet: 0],
+                          6000) do
+      {:ok, socket} ->
+        {:ok, Map.put(conn, :socket, socket)}
+      {:error, error} ->
+        {:error, %WebSockex.ConnError{error: error}}
+    end
+  end
 
-           :inet.setopts(conn.socket, active: true)
-           {:ok, conn}
-         else
-           {:error, _} = error ->
-             :proc_lib.init_ack(error)
-             exit(error)
+  def build_request(conn, key) do
+    headers = [{"Host", conn.host},
+               {"Connection", "Upgrade"},
+               {"Upgrade", "websocket"},
+               {"Sec-WebSocket-Version", "13"},
+               {"Sec-WebSocket-Key", key}] ++ conn.extra_headers
+              |> Enum.map(&format_header/1)
+
+    # Build the request
+    request = ["Get #{build_full_path(conn)} HTTP/1.1" | headers]
+              |> Enum.join("\r\n")
+
+    {:ok, request <> "\r\n\r\n"}
+  end
+
+  @doc """
+  Waits for the request response, decodes the packet, and returns the response
+  headers.
+
+  Sends any access information in the buffer back to the process as a message
+  to be processed.
+  """
+  @spec handle_response(__MODULE__.t) ::
+    {:ok, [header]} | {:error, reason :: term}
+  def handle_response(conn) do
+    with {:ok, buffer} <- wait_for_response(conn),
+         {:ok, headers, buffer} <- decode_response(buffer) do
+           # Send excess buffer back to the process
+           unless buffer == "" do
+             send(self(), {transport(conn.conn_mod), conn.socket, buffer})
+           end
+           {:ok, headers}
          end
   end
 
-  defp open_socket(conn) do
-    :gen_tcp.connect(String.to_charlist(conn.host),
-                     conn.port,
-                     [:binary, active: false, packet: 0],
-                     6000)
+  @doc """
+  Sets the socket to active.
+  """
+  @spec set_active(__MODULE__.t) :: :ok | {:error, reason :: term}
+  def set_active(%{conn_mod: :gen_tcp} = conn) do
+    :inet.setopts(conn.socket, active: true)
+  end
+
+  defp transport(:gen_tcp), do: :tcp
+
+  defp wait_for_response(conn, buffer \\ "") do
+    case Regex.match?(~r/\r\n\r\n/, buffer) do
+      true -> {:ok, buffer}
+      false ->
+        with {:ok, data} <- conn.conn_mod.recv(conn.socket, 0, 5000) do
+          wait_for_response(conn, buffer <> data)
+        else
+          {:error, reason} -> {:error, %WebSockex.ConnError{error: reason}}
+        end
+    end
+  end
+
+  defp format_header({field, value}) do
+    "#{field}: #{value}"
+  end
+
+  defp build_full_path(%__MODULE__{path: path, query: query}) do
+    struct(URI, %{path: path, query: query})
+    |> URI.to_string
   end
 
   defp decode_response(response) do
-    case :erlang.decode_packet(:http_bin, response, []) do 
+    case :erlang.decode_packet(:http_bin, response, []) do
       {:ok, {:http_response, _version, 101, _message}, rest} ->
          decode_headers(rest)
       {:ok, {:http_response, _, code, message}, _} ->
@@ -63,49 +136,5 @@ defmodule WebSockex.Conn do
       {:ok, :http_eoh, body} ->
         {:ok, headers, body}
     end
-  end
-
-  defp validate_handshake(headers, key) do
-    challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
-
-    {_, res} = List.keyfind(headers, "Sec-Websocket-Accept", 0)
-
-    if challenge == res do
-      :ok
-    else
-      {:error, :invalid_challenge_response}
-    end
-  end
-
-  defp wait_for_response(conn, buffer \\ "") do
-    case Regex.match?(~r/\r\n\r\n/, buffer) do
-      true -> {:ok, buffer}
-      false ->
-        with {:ok, data} <- conn.conn_mod.recv(conn.socket, 0) do
-          wait_for_response(conn, buffer <> data)
-        else
-          _ -> raise buffer
-        end
-    end
-  end
-
-  defp build_handshake(conn) do
-    key = :crypto.strong_rand_bytes(16) |> Base.encode64
-
-    request = ["Get #{conn.request} HTTP/1.1",
-               "Host: #{conn.host}",
-               "Connection: Upgrade",
-               "Sec-WebSocket-Version: 13",
-               "Sec-WebSocket-Key: #{key}",
-               "Upgrade: websocket",
-               "\r\n"]
-              |> Enum.join("\r\n")
-
-    {request, key}
-  end
-
-  defp build_full_path(%URI{path: path, query: query}) do
-    struct(URI, %{path: path, query: query})
-    |> URI.to_string
   end
 end

@@ -1,4 +1,6 @@
 defmodule WebSockex.Client do
+  @handshake_guid "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
   @moduledoc ~S"""
   A client handles negotiating the connection, then sending frames, receiving
   frames, closing, and reconnecting that connection.
@@ -23,6 +25,10 @@ defmodule WebSockex.Client do
 
   @type message :: {:ping | :ping, nil | binary} | {:text | :binary, binary}
   @type close_message :: {integer, binary}
+
+  @type options :: [option]
+
+  @type option :: {:extra_headers, [WebSockex.Conn.header]}
 
   @typedoc """
   The reason given and sent to the server when locally closing a connection.
@@ -127,7 +133,7 @@ defmodule WebSockex.Client do
     end
   end
 
-  def start_link(url, module, state) do
+  def start_link(url, module, state, opts \\ []) do
     case URI.parse(url) do
       %URI{host: host, port: port, scheme: protocol} = uri
       when is_nil(host)
@@ -136,7 +142,7 @@ defmodule WebSockex.Client do
         # TODO: Make this better
         {:error, {:bad_uri, uri}}
       %URI{} = uri ->
-        :proc_lib.start_link(__MODULE__, :init, [self(), uri, module, state])
+        :proc_lib.start_link(__MODULE__, :init, [self(), uri, module, state, opts])
       {:error, error} ->
         {:error, error}
     end
@@ -147,15 +153,29 @@ defmodule WebSockex.Client do
     :ok
   end
 
-  def init(parent, uri, module, state) do
+  def init(parent, uri, module, state, opts) do
     # OTP stuffs
     debug = :sys.debug_options([])
 
-
-    {:ok, conn} = WebSockex.Conn.connect(uri)
-
-    :proc_lib.init_ack(parent, {:ok, self()})
-    websocket_loop(parent, debug, %{conn: conn, module: module, module_state: state})
+    try do
+    with {:ok, conn} <- WebSockex.Conn.open_socket(uri, opts),
+         key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
+         {:ok, request} <- WebSockex.Conn.build_request(conn, key),
+         :ok <- WebSockex.Conn.socket_send(conn, request),
+         {:ok, headers} <- WebSockex.Conn.handle_response(conn),
+         :ok <- validate_handshake(headers, key),
+         :ok <- WebSockex.Conn.set_active(conn) do
+           :proc_lib.init_ack(parent, {:ok, self()})
+           websocket_loop(parent, debug, %{conn: conn, module: module, module_state: state})
+         else
+           {:error, _} = error ->
+             :proc_lib.init_ack(parent, error)
+             exit(error)
+         end
+    catch
+      {:error, reason} ->
+        exit(Exception.normalize(:error, reason, System.stacktrace()))
+    end
   end
 
   ## OTP Stuffs
@@ -177,25 +197,50 @@ defmodule WebSockex.Client do
     {:ok, new_state, new_state}
   end
 
-  defp websocket_loop(parent, debug, %{conn: conn} = state) do
+  defp websocket_loop(parent, debug, state) do
+    transport = state.conn.transport
+    socket = state.conn.socket
     receive do
       {:system, from, req} ->
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
       {:"$websockex_cast", msg} ->
         common_handle(parent, debug, {:handle_cast, msg}, state)
+      {transport, socket, message} ->
+        websocket_loop(parent, debug, state)
       msg ->
         common_handle(parent, debug, {:handle_info, msg}, state)
     end
   end
 
   defp common_handle(parent, debug, {function, msg}, state) do
-    case apply(state.module, function, [msg, state.module_state]) do
-          {:ok, new_state} ->
-            websocket_loop(parent, debug, %{state | module_state: new_state})
-          {:reply, _message, _new_state} ->
-            raise "Not Implemented"
-          {:close, _close_message, _new_state} ->
-            raise "Not Implemented"
+    try do
+      case apply(state.module, function, [msg, state.module_state]) do
+            {:ok, new_state} ->
+              websocket_loop(parent, debug, %{state | module_state: new_state})
+            {:reply, _message, _new_state} ->
+              raise "Not Implemented"
+            {:close, _close_message, _new_state} ->
+              raise "Not Implemented"
+            badreply ->
+              raise %WebSockex.BadResponseError{ module: state.module,
+                function: function, args: [msg, state.module_state],
+                response: badreply}
+      end
+    rescue
+      exception ->
+        exit({exception, System.stacktrace})
+    end
+  end
+
+  defp validate_handshake(headers, key) do
+    challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
+
+    {_, res} = List.keyfind(headers, "Sec-Websocket-Accept", 0)
+
+    if challenge == res do
+      :ok
+    else
+      {:error, %WebSockex.HandshakeError{response: res, challenge: challenge}}
     end
   end
 end

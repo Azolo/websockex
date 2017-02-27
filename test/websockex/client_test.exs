@@ -22,6 +22,10 @@ defmodule WebSockex.ClientTest do
       send(pid, :info)
       {:ok, state}
     end
+
+    def handle_info(:bad_reply, _) do
+      :lemon_pie
+    end
   end
 
   setup do
@@ -55,5 +59,11 @@ defmodule WebSockex.ClientTest do
     send(context.pid, {:pid_reply, self()})
 
     assert_receive :info
+  end
+
+  test "common_handle exits with a BadResponseError", context do
+    Process.flag(:trap_exit, true)
+    send(context.pid, :bad_reply)
+    assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
   end
 end
