@@ -135,12 +135,12 @@ defmodule WebSockex.Client do
 
   def start_link(url, module, state, opts \\ []) do
     case URI.parse(url) do
-      %URI{host: host, port: port, scheme: protocol} = uri
+      # This is confusing to look at. But it's just a match with multiple guards
+      %URI{host: host, port: port, scheme: protocol}
       when is_nil(host)
       when is_nil(port)
       when not protocol in ["ws", "wss"] ->
-        # TODO: Make this better
-        {:error, {:bad_uri, uri}}
+        {:error, %WebSockex.URLError{url: url}}
       %URI{} = uri ->
         :proc_lib.start_link(__MODULE__, :init, [self(), uri, module, state, opts])
       {:error, error} ->
@@ -168,13 +168,14 @@ defmodule WebSockex.Client do
            :proc_lib.init_ack(parent, {:ok, self()})
            websocket_loop(parent, debug, %{conn: conn, module: module, module_state: state})
          else
-           {:error, _} = error ->
+           {:error, reason} ->
+             error = Exception.normalize(:error, reason)
              :proc_lib.init_ack(parent, error)
              exit(error)
          end
-    catch
-      {:error, reason} ->
-        exit(Exception.normalize(:error, reason, System.stacktrace()))
+    rescue
+      exception ->
+        exit({exception, System.stacktrace})
     end
   end
 
@@ -197,6 +198,8 @@ defmodule WebSockex.Client do
     {:ok, new_state, new_state}
   end
 
+  # Internals! Yay
+
   defp websocket_loop(parent, debug, state) do
     transport = state.conn.transport
     socket = state.conn.socket
@@ -205,7 +208,8 @@ defmodule WebSockex.Client do
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
       {:"$websockex_cast", msg} ->
         common_handle(parent, debug, {:handle_cast, msg}, state)
-      {transport, socket, message} ->
+      {^transport, ^socket, _message} ->
+        # TODO: Actually implement this stuff
         websocket_loop(parent, debug, state)
       msg ->
         common_handle(parent, debug, {:handle_info, msg}, state)

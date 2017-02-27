@@ -20,6 +20,17 @@ defmodule WebSockex.ConnTest do
         WebSockex.Conn.open_socket(context.uri)
   end
 
+  test "open_socket with bad path", context do
+    uri = %{context.uri | path: "bad_path"}
+
+    {:ok, conn} = WebSockex.Conn.open_socket(uri)
+    {:ok, request} = WebSockex.Conn.build_request(conn, "pants")
+    :ok = WebSockex.Conn.socket_send(conn, request)
+
+    assert WebSockex.Conn.handle_response(conn) ==
+      {:error, %WebSockex.Conn.RequestError{code: 400, message: "Bad Request"}}
+  end
+
   test "build_request" do
     conn = %WebSockex.Conn{host: "lime.com",
                            path: "/coco",

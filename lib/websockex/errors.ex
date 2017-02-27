@@ -1,9 +1,24 @@
 defmodule WebSockex.ConnError do
   @moduledoc false
-  defexception [:error]
+  defexception [:original]
 
-  # This seems subpar, maybe look at this later
-  def message(%__MODULE__{error: error}), do: "Connection Error: #{inspect error}"
+  def message(%__MODULE__{original: :nxdomain}), do: "Connection Error: Could not resolve domain name."
+  def message(%__MODULE__{original: error}), do: "Connection Error: #{inspect error}"
+end
+
+defmodule WebSockex.Conn.RequestError do
+  defexception [:code, :message]
+
+  def message(%__MODULE__{code: code, message: message}) do
+    "Didn't get a proper response from the server. The response was: #{code} #{message}"
+  end
+end
+
+defmodule WebSockex.URLError do
+  @moduledoc false
+  defexception [:url]
+
+  def message(%__MODULE__{url: url}), do: "Invalid URL: #{inspect url}"
 end
 
 defmodule WebSockex.HandshakeError do

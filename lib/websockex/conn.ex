@@ -48,10 +48,16 @@ defmodule WebSockex.Conn do
       {:ok, socket} ->
         {:ok, Map.put(conn, :socket, socket)}
       {:error, error} ->
-        {:error, %WebSockex.ConnError{error: error}}
+        {:error, %WebSockex.ConnError{original: error}}
     end
   end
 
+  @doc """
+  Builds the request to be sent along the newly opened socket.
+
+  The key parameter is part of the websocket handshake process.
+  """
+  @spec build_request(__MODULE__.t, key :: String.t) :: {:ok, String.t}
   def build_request(conn, key) do
     headers = [{"Host", conn.host},
                {"Connection", "Upgrade"},
@@ -104,7 +110,7 @@ defmodule WebSockex.Conn do
         with {:ok, data} <- conn.conn_mod.recv(conn.socket, 0, 5000) do
           wait_for_response(conn, buffer <> data)
         else
-          {:error, reason} -> {:error, %WebSockex.ConnError{error: reason}}
+          {:error, reason} -> {:error, %WebSockex.ConnError{original: reason}}
         end
     end
   end
@@ -123,7 +129,7 @@ defmodule WebSockex.Conn do
       {:ok, {:http_response, _version, 101, _message}, rest} ->
          decode_headers(rest)
       {:ok, {:http_response, _, code, message}, _} ->
-        {:error, {code, message}}
+        {:error, %WebSockex.Conn.RequestError{code: code, message: message}}
       {:error, error} ->
         {:error, error}
     end

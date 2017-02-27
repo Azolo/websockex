@@ -61,6 +61,10 @@ defmodule WebSockex.ClientTest do
     assert_receive :info
   end
 
+  test "informative error with bad url" do
+    assert TestClient.start_link("lemon_pie", :ok) == {:error, %WebSockex.URLError{url: "lemon_pie"}}
+  end
+
   test "common_handle exits with a BadResponseError", context do
     Process.flag(:trap_exit, true)
     send(context.pid, :bad_reply)
