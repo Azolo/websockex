@@ -25,6 +25,15 @@ defmodule WebSockex.TestServer do
     Plug.Adapters.Cowboy.shutdown(ref)
   end
 
+  def receive_socket_pid do
+    receive do
+      pid when is_pid(pid) -> pid
+      _ -> receive_socket_pid()
+    after
+      500 -> raise "No Server Socket pid"
+    end
+  end
+
   defp dispatch(pid) do
     [{:_, [{"/ws", WebSockex.TestSocket, [pid]}]}]
   end
@@ -57,5 +66,7 @@ defmodule WebSockex.TestSocket do
   end
 
   def websocket_handle(_, req, state), do: {:ok, req, state}
+  def websocket_info(:ping, req, state), do: {:reply, :ping, req, state}
+  def websocket_info(:payload_ping, req, state), do: {:reply, {:ping, "Llama and Lambs"}, req, state}
   def websocket_info(_, req, state), do: {:ok, req, state}
 end
