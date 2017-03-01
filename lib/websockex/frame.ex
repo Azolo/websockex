@@ -57,6 +57,13 @@ defmodule WebSockex.Frame do
     {:incomplete, buffer}
   end
 
+  # Close Frame with Single Byte
+  def parse_frame(<<1::1, 0::3, 8::4, 0::1, 1::7, _::bitstring>> = buffer) do
+    {:error, %WebSockex.FrameError{reason: :close_with_single_byte_payload,
+                                   opcode: :close,
+                                   buffer: buffer}}
+  end
+
   for {key, opcode} <- @opcodes do
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, rest::bitstring>>) do
       <<payload::bytes-size(len), buffer::bitstring>> = rest

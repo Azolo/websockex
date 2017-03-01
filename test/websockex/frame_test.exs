@@ -95,5 +95,14 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(frame) ==
         {:error, %{error | buffer: frame}}
     end
+
+    test "close frames with data must have atleast 2 bytes of data" do
+      frame = <<1::1, 0::3, 8::4, 0::1, 1::7, 0::8>>
+      assert Frame.parse_frame(frame) ==
+        {:error,
+          %WebSockex.FrameError{reason: :close_with_single_byte_payload,
+                                opcode: :close,
+                                buffer: frame}}
+    end
   end
 end
