@@ -41,3 +41,14 @@ defmodule WebSockex.BadResponseError do
     "Bad Response: Got #{error.response} from #{Exception.format_mfa(error.module, error.function, error.args)}"
   end
 end
+
+defmodule WebSockex.FrameError do
+  defexception [:reason, :fin, :opcode, :mask, :length, :payload]
+
+  def message(%__MODULE__{reason: :nonfin_control_frame, fin: 0} = exception) do
+    "Control Frames Can't Be Fragmented: opcode: #{exception.opcode}, fin: #{exception.fin}"
+  end
+  def message(%__MODULE__{} = exception) do
+    "Frame Error: #{inspect exception}"
+  end
+end

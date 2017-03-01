@@ -60,6 +60,16 @@ defmodule WebSockex.FrameTest do
         {%Frame{opcode: :binary, payload: @binary}, <<>>}
     end
 
+    test "nonfin control frame returns an error" do
+      assert Frame.parse_frame(<<0::1, 0::3, 9::4, 0::1, 0::7>>) ==
+        {:error,
+          %WebSockex.FrameError{reason: :nonfin_control_frame,
+                                opcode: :ping,
+                                fin: 0,
+                                length: 0,
+                                mask: 0}}
+    end
+
     test "returns overflow buffer" do
       <<first::bits-size(16), overflow::bits-size(14), rest::bitstring>> =
         <<@ping_frame, @ping_frame_with_payload>>

@@ -13,6 +13,7 @@ defmodule WebSockex.Frame do
   @opcodes Map.merge(@data_codes, @control_codes)
 
   @type opcode :: :text | :binary | :close | :ping | :pong
+  @type buffer :: bitstring
 
   defstruct [:opcode, :payload]
 
@@ -22,13 +23,22 @@ defmodule WebSockex.Frame do
   @doc """
   Parses a bitstring and returns a frame.
   """
-  @spec parse_frame(bitstring) :: {:incomplete, bitstring} | __MODULE__.t
+  @spec parse_frame(bitstring) ::
+    {:incomplete, buffer} | {__MODULE__.t, buffer} | {:error, %WebSockex.FrameError{}}
   def parse_frame(data) when bit_size(data) < 16 do
     {:incomplete, data}
   end
   for {key, opcode} <- @control_codes do
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 0::7, buffer::bitstring>>) do
       {%__MODULE__{opcode: unquote(key)}, buffer}
+    end
+    def parse_frame(<<0::1, 0::3, unquote(opcode)::4, 0::1, len::7, _::bitstring>>) do
+      {:error,
+        %WebSockex.FrameError{reason: :nonfin_control_frame,
+                              opcode: unquote(key),
+                              fin: 0,
+                              length: len,
+                              mask: 0}}
     end
   end
 
