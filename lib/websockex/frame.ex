@@ -29,6 +29,7 @@ defmodule WebSockex.Frame do
     {:incomplete, data}
   end
   for {key, opcode} <- @control_codes do
+    # Control Codes can have 0 length payloads
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 0::7, buffer::bitstring>>) do
       {%__MODULE__{opcode: unquote(key)}, buffer}
     end

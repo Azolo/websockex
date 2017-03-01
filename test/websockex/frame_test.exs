@@ -27,7 +27,6 @@ defmodule WebSockex.FrameTest do
       <<part::10, _::bits>> = @ping_frame
       assert Frame.parse_frame(<<part>>) == {:incomplete, <<part>>}
     end
-
     test "handles incomplete frames with complete headers" do
       <<part::bits-size(20), rest::bits>> = @text_frame
       assert Frame.parse_frame(part) == {:incomplete, part}
@@ -35,7 +34,14 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(<<part::bits, rest::bits>>) ==
         {%Frame{opcode: :text, payload: "Hello"}, <<>>}
     end
-
+    test "returns overflow buffer" do
+      <<first::bits-size(16), overflow::bits-size(14), rest::bitstring>> =
+        <<@ping_frame, @ping_frame_with_payload>>
+      payload = <<first::bits, overflow::bits>>
+      assert Frame.parse_frame(payload) == {%Frame{opcode: :ping}, overflow}
+      assert Frame.parse_frame(<<overflow::bits, rest::bits>>) ==
+        {%Frame{opcode: :ping, payload: "Hello"}, <<>>}
+    end
 
     test "parses a close frame" do
       assert Frame.parse_frame(@close_frame) == {%Frame{opcode: :close}, <<>>}
@@ -88,15 +94,6 @@ defmodule WebSockex.FrameTest do
       frame = <<1::1, 0::3, 9::4, 0::1, 127::7>>
       assert Frame.parse_frame(frame) ==
         {:error, %{error | buffer: frame}}
-    end
-
-    test "returns overflow buffer" do
-      <<first::bits-size(16), overflow::bits-size(14), rest::bitstring>> =
-        <<@ping_frame, @ping_frame_with_payload>>
-      payload = <<first::bits, overflow::bits>>
-      assert Frame.parse_frame(payload) == {%Frame{opcode: :ping}, overflow}
-      assert Frame.parse_frame(<<overflow::bits, rest::bits>>) ==
-        {%Frame{opcode: :ping, payload: "Hello"}, <<>>}
     end
   end
 end
