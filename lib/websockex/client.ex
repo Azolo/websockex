@@ -200,6 +200,18 @@ defmodule WebSockex.Client do
 
   # Internals! Yay
 
+  defp validate_handshake(headers, key) do
+    challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
+
+    {_, res} = List.keyfind(headers, "Sec-Websocket-Accept", 0)
+
+    if challenge == res do
+      :ok
+    else
+      {:error, %WebSockex.HandshakeError{response: res, challenge: challenge}}
+    end
+  end
+
   defp websocket_loop(parent, debug, state) do
     transport = state.conn.transport
     socket = state.conn.socket
@@ -233,18 +245,6 @@ defmodule WebSockex.Client do
     rescue
       exception ->
         exit({exception, System.stacktrace})
-    end
-  end
-
-  defp validate_handshake(headers, key) do
-    challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
-
-    {_, res} = List.keyfind(headers, "Sec-Websocket-Accept", 0)
-
-    if challenge == res do
-      :ok
-    else
-      {:error, %WebSockex.HandshakeError{response: res, challenge: challenge}}
     end
   end
 end
