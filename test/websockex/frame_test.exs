@@ -28,6 +28,15 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(<<part>>) == {:incomplete, <<part>>}
     end
 
+    test "handles incomplete frames with complete headers" do
+      <<part::bits-size(20), rest::bits>> = @text_frame
+      assert Frame.parse_frame(part) == {:incomplete, part}
+
+      assert Frame.parse_frame(<<part::bits, rest::bits>>) ==
+        {%Frame{opcode: :text, payload: "Hello"}, <<>>}
+    end
+
+
     test "parses a close frame" do
       assert Frame.parse_frame(@close_frame) == {%Frame{opcode: :close}, <<>>}
     end

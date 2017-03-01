@@ -51,6 +51,11 @@ defmodule WebSockex.Frame do
     end
   end
 
+  # Incomplete Frame
+  def parse_frame(<<_::9, len::7, rest::bitstring>> = buffer) when byte_size(rest) < len do
+    {:incomplete, buffer}
+  end
+
   for {key, opcode} <- @opcodes do
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, rest::bitstring>>) do
       <<payload::bytes-size(len), buffer::bitstring>> = rest
