@@ -43,10 +43,13 @@ defmodule WebSockex.BadResponseError do
 end
 
 defmodule WebSockex.FrameError do
-  defexception [:reason, :fin, :opcode, :mask, :length, :payload]
+  defexception [:reason, :opcode, :buffer]
 
-  def message(%__MODULE__{reason: :nonfin_control_frame, fin: 0} = exception) do
-    "Control Frames Can't Be Fragmented: opcode: #{exception.opcode}, fin: #{exception.fin}"
+  def message(%__MODULE__{reason: :nonfin_control_frame} = exception) do
+    "Fragmented Control Frame: Control Frames Can't Be Fragmented\nbuffer: #{exception.buffer}"
+  end
+  def message(%__MODULE__{reason: :control_frame_too_large} = exception) do
+    "Control Frame Too Large: Control Frames Can't Be Larger Than 125 Bytes\nbuffer: #{exception.buffer}"
   end
   def message(%__MODULE__{} = exception) do
     "Frame Error: #{inspect exception}"

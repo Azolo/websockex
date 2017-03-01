@@ -61,13 +61,24 @@ defmodule WebSockex.FrameTest do
     end
 
     test "nonfin control frame returns an error" do
-      assert Frame.parse_frame(<<0::1, 0::3, 9::4, 0::1, 0::7>>) ==
+      frame = <<0::1, 0::3, 9::4, 0::1, 0::7>>
+      assert Frame.parse_frame(frame) ==
         {:error,
           %WebSockex.FrameError{reason: :nonfin_control_frame,
                                 opcode: :ping,
-                                fin: 0,
-                                length: 0,
-                                mask: 0}}
+                                buffer: frame}}
+    end
+    test "large control frames return an error" do
+      error = %WebSockex.FrameError{reason: :control_frame_too_large,
+                                    opcode: :ping}
+
+      frame = <<1::1, 0::3, 9::4, 0::1, 126::7>>
+      assert Frame.parse_frame(frame) ==
+        {:error, %{error | buffer: frame}}
+
+      frame = <<1::1, 0::3, 9::4, 0::1, 127::7>>
+      assert Frame.parse_frame(frame) ==
+        {:error, %{error | buffer: frame}}
     end
 
     test "returns overflow buffer" do

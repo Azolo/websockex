@@ -32,13 +32,22 @@ defmodule WebSockex.Frame do
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 0::7, buffer::bitstring>>) do
       {%__MODULE__{opcode: unquote(key)}, buffer}
     end
-    def parse_frame(<<0::1, 0::3, unquote(opcode)::4, 0::1, len::7, _::bitstring>>) do
-      {:error,
-        %WebSockex.FrameError{reason: :nonfin_control_frame,
-                              opcode: unquote(key),
-                              fin: 0,
-                              length: len,
-                              mask: 0}}
+    # Large Control Frames
+    def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 126::7, _::bitstring>> = buffer) do
+      {:error, %WebSockex.FrameError{reason: :control_frame_too_large,
+                                     opcode: unquote(key),
+                                     buffer: buffer}}
+    end
+    def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 127::7, _::bitstring>> = buffer) do
+      {:error, %WebSockex.FrameError{reason: :control_frame_too_large,
+                                     opcode: unquote(key),
+                                     buffer: buffer}}
+    end
+    # Nonfin Control Frames
+    def parse_frame(<<0::1, 0::3, unquote(opcode)::4, 0::1, _::7, _::bitstring>> = buffer) do
+      {:error, %WebSockex.FrameError{reason: :nonfin_control_frame,
+                                     opcode: unquote(key),
+                                     buffer: buffer}}
     end
   end
 
