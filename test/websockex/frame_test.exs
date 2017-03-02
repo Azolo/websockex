@@ -105,6 +105,14 @@ defmodule WebSockex.FrameTest do
                                 buffer: frame}}
     end
 
+    test "Close Frames with improper close codes return an error" do
+      frame = <<1::1, 0::3, 8::4, 0::1, 7::7, 5000::16, "Hello">>
+      assert Frame.parse_frame(frame) ==
+        {:error, %WebSockex.FrameError{reason: :invalid_close_code,
+                                       opcode: :close,
+                                       buffer: frame}}
+    end
+
     test "Text Frames check for valid UTF-8" do
       frame = <<1::1, 0::3, 1::4, 0::1, 7::7, 0xFFFF::16, "Hello"::utf8>>
       assert Frame.parse_frame(frame) ==

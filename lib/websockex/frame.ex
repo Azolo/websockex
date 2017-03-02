@@ -79,6 +79,11 @@ defmodule WebSockex.Frame do
                                      buffer: buffer}}
     end
   end
+  def parse_frame(<<1::1, 0::3, 8::4, _::bitstring>> = buffer) do
+    {:error, %WebSockex.FrameError{reason: :invalid_close_code,
+                                   opcode: :close,
+                                   buffer: buffer}}
+  end
 
   # Check for UTF-8 in Text payloads
   def parse_frame(<<1::1, 0::3, 1::4, 0::1, len::7, remaining::bitstring>> = buffer) do
