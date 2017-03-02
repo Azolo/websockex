@@ -66,11 +66,17 @@ defmodule WebSockex.Frame do
                                    buffer: buffer}}
   end
 
-  # Don't need to check for proper UTF-8 here
-  for {key, opcode} <- Map.take(@opcodes, [:binary, :ping, :pong]) do
-    def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
-      <<payload::bytes-size(len), rest::bitstring>> = remaining
-      {:ok, {unquote(key), payload}, rest}
+  # Parse Close Frames with Payloads
+  def parse_frame(<<1::1, 0::3, 8::4, 0::1, len::7, close_code::integer-size(16), remaining::bitstring>> = buffer)
+  when close_code in 1000..4999 do
+    size = len - 2
+    <<payload::bytes-size(size), rest::bitstring>> = remaining
+    if String.valid?(payload) do
+      {:ok, {:close, close_code, payload}, rest}
+    else
+      {:error, %WebSockex.FrameError{reason: :invalid_utf8,
+                                     opcode: :close,
+                                     buffer: buffer}}
     end
   end
 
@@ -83,6 +89,14 @@ defmodule WebSockex.Frame do
       {:error, %WebSockex.FrameError{reason: :invalid_utf8,
                                      opcode: :text,
                                      buffer: buffer}}
+    end
+  end
+
+  # Don't need to check for proper UTF-8 here
+  for {key, opcode} <- Map.take(@opcodes, [:binary, :ping, :pong]) do
+    def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
+      <<payload::bytes-size(len), rest::bitstring>> = remaining
+      {:ok, {unquote(key), payload}, rest}
     end
   end
 end
