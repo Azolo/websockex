@@ -12,7 +12,7 @@ defmodule WebSockex.FrameTest do
   @close_frame <<1::1, 0::3, 8::4, 0::1, 0::7>>
   @ping_frame <<1::1, 0::3, 9::4, 0::1, 0::7>>
   @pong_frame <<1::1, 0::3, 10::4, 0::1, 0::7>>
-  @close_frame_with_payload <<1::1, 0::3, 8::4, 0::1, 5::7, "Hello">>
+  @close_frame_with_payload <<1::1, 0::3, 8::4, 0::1, 7::7, 1000::16, "Hello">>
   @ping_frame_with_payload <<1::1, 0::3, 9::4, 0::1, 5::7, "Hello">>
   @pong_frame_with_payload <<1::1, 0::3, 10::4, 0::1, 5::7, "Hello">>
 
@@ -32,47 +32,47 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(part) == {:incomplete, part}
 
       assert Frame.parse_frame(<<part::bits, rest::bits>>) ==
-        {%Frame{opcode: :text, payload: "Hello"}, <<>>}
+        {:ok, {:text, "Hello"}, <<>>}
     end
     test "returns overflow buffer" do
       <<first::bits-size(16), overflow::bits-size(14), rest::bitstring>> =
         <<@ping_frame, @ping_frame_with_payload>>
       payload = <<first::bits, overflow::bits>>
-      assert Frame.parse_frame(payload) == {%Frame{opcode: :ping}, overflow}
+      assert Frame.parse_frame(payload) == {:ok, :ping, overflow}
       assert Frame.parse_frame(<<overflow::bits, rest::bits>>) ==
-        {%Frame{opcode: :ping, payload: "Hello"}, <<>>}
+        {:ok, {:ping, "Hello"}, <<>>}
     end
 
     test "parses a close frame" do
-      assert Frame.parse_frame(@close_frame) == {%Frame{opcode: :close}, <<>>}
+      assert Frame.parse_frame(@close_frame) == {:ok, :close, <<>>}
     end
     test "parses a ping frame" do
-      assert Frame.parse_frame(@ping_frame) == {%Frame{opcode: :ping}, <<>>}
+      assert Frame.parse_frame(@ping_frame) == {:ok, :ping, <<>>}
     end
     test "parses a pong frame" do
-      assert Frame.parse_frame(@pong_frame) == {%Frame{opcode: :pong}, <<>>}
+      assert Frame.parse_frame(@pong_frame) == {:ok, :pong, <<>>}
     end
 
     test "parses a close frame with a payload" do
       assert Frame.parse_frame(@close_frame_with_payload) ==
-        {%Frame{opcode: :close, payload: "Hello"}, <<>>}
+        {:ok, {:close, 1000, "Hello"}, <<>>}
     end
     test "parses a ping frame with a payload" do
       assert Frame.parse_frame(@ping_frame_with_payload) ==
-        {%Frame{opcode: :ping, payload: "Hello"}, <<>>}
+        {:ok, {:ping, "Hello"}, <<>>}
     end
     test "parses a pong frame with a payload" do
       assert Frame.parse_frame(@pong_frame_with_payload) ==
-        {%Frame{opcode: :pong, payload: "Hello"}, <<>>}
+        {:ok, {:pong, "Hello"}, <<>>}
     end
 
     test "parses a text frame" do
       assert Frame.parse_frame(@text_frame) ==
-        {%Frame{opcode: :text, payload: "Hello"}, <<>>}
+        {:ok, {:text, "Hello"}, <<>>}
     end
     test "parses a binary frame" do
       assert Frame.parse_frame(@binary_frame) ==
-        {%Frame{opcode: :binary, payload: @binary}, <<>>}
+        {:ok, {:binary, @binary}, <<>>}
     end
 
     test "nonfin control frame returns an error" do

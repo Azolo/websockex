@@ -9,26 +9,31 @@ defmodule WebSockex.Frame do
                    ping: 9,
                    pong: 10}
   @opcodes Map.merge(@data_codes, @control_codes)
+
   @type opcode :: :text | :binary | :close | :ping | :pong
+  @type close_code :: 1000..4999
+
+  @typedoc "The incomplete or unhandled remainder of a binary"
   @type buffer :: bitstring
 
-  defstruct [:opcode, :payload]
+  @typedoc "This is required to be valid UTF-8"
+  @type utf8 :: binary
 
-  @type t :: %__MODULE__{opcode: opcode,
-                         payload: binary | nil}
+  @type frame :: :ping | :pong | :close | {:ping, binary} | {:pong, binary} |
+                 {:close, close_code, utf8} | {:text, utf8} | {:binary, binary}
 
   @doc """
   Parses a bitstring and returns a frame.
   """
   @spec parse_frame(bitstring) ::
-    {:incomplete, buffer} | {__MODULE__.t, buffer} | {:error, %WebSockex.FrameError{}}
+    {:incomplete, buffer} | {:ok, frame, buffer} | {:error, %WebSockex.FrameError{}}
   def parse_frame(data) when bit_size(data) < 16 do
     {:incomplete, data}
   end
   for {key, opcode} <- @control_codes do
     # Control Codes can have 0 length payloads
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 0::7, buffer::bitstring>>) do
-      {%__MODULE__{opcode: unquote(key)}, buffer}
+      {:ok, unquote(key), buffer}
     end
     # Large Control Frames
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 126::7, _::bitstring>> = buffer) do
@@ -65,7 +70,7 @@ defmodule WebSockex.Frame do
   for {key, opcode} <- Map.take(@opcodes, [:binary, :ping, :pong]) do
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
       <<payload::bytes-size(len), rest::bitstring>> = remaining
-      {%__MODULE__{opcode: unquote(key), payload: payload}, rest}
+      {:ok, {unquote(key), payload}, rest}
     end
   end
 
@@ -73,7 +78,7 @@ defmodule WebSockex.Frame do
   def parse_frame(<<1::1, 0::3, 1::4, 0::1, len::7, remaining::bitstring>> = buffer) do
     <<payload::bytes-size(len), rest::bitstring>> = remaining
     if String.valid?(payload) do
-      {%__MODULE__{opcode: :text, payload: payload}, rest}
+      {:ok, {:text, payload}, rest}
     else
       {:error, %WebSockex.FrameError{reason: :invalid_utf8,
                                      opcode: :text,
