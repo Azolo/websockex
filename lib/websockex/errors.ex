@@ -51,6 +51,9 @@ defmodule WebSockex.FrameError do
   def message(%__MODULE__{reason: :control_frame_too_large} = exception) do
     "Control Frame Too Large: Control Frames Can't Be Larger Than 125 Bytes\nbuffer: #{exception.buffer}"
   end
+  def message(%__MODULE__{reason: :invalid_utf8} = exception) do
+    "Invalid UTF-8: Text and Close frames must have UTF-8 payloads.\nbuffer: #{exception.buffer}"
+  end
   def message(%__MODULE__{} = exception) do
     "Frame Error: #{inspect exception}"
   end

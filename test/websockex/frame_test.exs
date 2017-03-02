@@ -104,5 +104,13 @@ defmodule WebSockex.FrameTest do
                                 opcode: :close,
                                 buffer: frame}}
     end
+
+    test "Text Frames check for valid UTF-8" do
+      frame = <<1::1, 0::3, 1::4, 0::1, 7::7, 0xFFFF::16, "Hello"::utf8>>
+      assert Frame.parse_frame(frame) ==
+        {:error, %WebSockex.FrameError{reason: :invalid_utf8,
+                                       opcode: :text,
+                                       buffer: frame}}
+    end
   end
 end
