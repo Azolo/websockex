@@ -18,7 +18,6 @@ defmodule WebSockex.FrameTest do
 
   @binary :erlang.term_to_binary :hello
   @binary_size byte_size @binary
-
   @text_frame <<1::1, 0::3, 1::4, 0::1, 5::7, "Hello"::utf8>>
   @binary_frame <<1::1, 0::3, 2::4, 0::1, @binary_size::7, @binary::bytes>>
 
@@ -34,6 +33,17 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(<<part::bits, rest::bits>>) ==
         {:ok, {:text, "Hello"}, <<>>}
     end
+    test "handles incomplete large frames" do
+      len = 0x5555
+      frame = <<1::1, 0::3, 1::4, 0::1, 126::7, len::16, 0::500*8, "Hello">>
+      assert Frame.parse_frame(frame) == :incomplete
+    end
+    test "handles incomplete very large frame" do
+      len = 0x5FFFF
+      frame = <<1::1, 0::3, 1::4, 0::1, 127::7, len::64, 0::1000*8, "Hello">>
+      assert Frame.parse_frame(frame) == :incomplete
+    end
+
     test "returns overflow buffer" do
       <<first::bits-size(16), overflow::bits-size(14), rest::bitstring>> =
         <<@ping_frame, @ping_frame_with_payload>>

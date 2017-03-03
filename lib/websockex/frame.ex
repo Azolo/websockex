@@ -53,10 +53,21 @@ defmodule WebSockex.Frame do
     end
   end
 
-  # Incomplete Frame
+  # Incomplete Frames
   def parse_frame(<<_::9, len::7, remaining::bitstring>>) when byte_size(remaining) < len do
     :incomplete
   end
+  for {_key, opcode} <- Map.take(@opcodes, [:text, :binary]) do
+    def parse_frame(<<_::1, 0::3, unquote(opcode)::4, 0::1, 126::7, len::16, remaining::bitstring>>)
+    when byte_size(remaining) < len do
+      :incomplete
+    end
+    def parse_frame(<<_::1, 0::3, unquote(opcode)::4, 0::1, 127::7, len::64, remaining::bitstring>>)
+    when byte_size(remaining) < len do
+      :incomplete
+    end
+  end
+
 
   # Close Frame with Single Byte
   def parse_frame(<<1::1, 0::3, 8::4, 0::1, 1::7, _::bitstring>> = buffer) do
