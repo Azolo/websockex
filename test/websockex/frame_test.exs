@@ -25,11 +25,11 @@ defmodule WebSockex.FrameTest do
   describe "parse_frame" do
     test "returns incomplete when the frame is less than 16 bits" do
       <<part::10, _::bits>> = @ping_frame
-      assert Frame.parse_frame(<<part>>) == {:incomplete, <<part>>}
+      assert Frame.parse_frame(<<part>>) == :incomplete
     end
     test "handles incomplete frames with complete headers" do
       <<part::bits-size(20), rest::bits>> = @text_frame
-      assert Frame.parse_frame(part) == {:incomplete, part}
+      assert Frame.parse_frame(part) == :incomplete
 
       assert Frame.parse_frame(<<part::bits, rest::bits>>) ==
         {:ok, {:text, "Hello"}, <<>>}

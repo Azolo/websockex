@@ -3,12 +3,11 @@ defmodule WebSockex.Frame do
   Functions for parsing and encoding frames.
   """
 
-  @data_codes %{text: 1,
-                binary: 2}
-  @control_codes %{close: 8,
-                   ping: 9,
-                   pong: 10}
-  @opcodes Map.merge(@data_codes, @control_codes)
+  @opcodes %{text: 1,
+             binary: 2,
+             close: 8,
+             ping: 9,
+             pong: 10}
 
   @type opcode :: :text | :binary | :close | :ping | :pong
   @type close_code :: 1000..4999
@@ -26,11 +25,11 @@ defmodule WebSockex.Frame do
   Parses a bitstring and returns a frame.
   """
   @spec parse_frame(bitstring) ::
-    {:incomplete, buffer} | {:ok, frame, buffer} | {:error, %WebSockex.FrameError{}}
+    :incomplete | {:ok, frame, buffer} | {:error, %WebSockex.FrameError{}}
   def parse_frame(data) when bit_size(data) < 16 do
-    {:incomplete, data}
+    :incomplete
   end
-  for {key, opcode} <- @control_codes do
+  for {key, opcode} <- Map.take(@opcodes, [:close, :ping, :pong]) do
     # Control Codes can have 0 length payloads
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, 0::7, buffer::bitstring>>) do
       {:ok, unquote(key), buffer}
@@ -55,8 +54,8 @@ defmodule WebSockex.Frame do
   end
 
   # Incomplete Frame
-  def parse_frame(<<_::9, len::7, remaining::bitstring>> = buffer) when byte_size(remaining) < len do
-    {:incomplete, buffer}
+  def parse_frame(<<_::9, len::7, remaining::bitstring>>) when byte_size(remaining) < len do
+    :incomplete
   end
 
   # Close Frame with Single Byte
