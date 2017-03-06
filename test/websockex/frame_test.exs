@@ -98,6 +98,13 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(frame) == {:ok, {:text, string}, <<>>}
     end
 
+    test "parses a large binary frame" do
+      binary = <<0::5000*8, @binary::binary>>
+      len = byte_size binary
+      frame = <<1::1, 0::3, 2::4, 0::1, 126::7, len::16, binary::binary>>
+      assert Frame.parse_frame(frame) == {:ok, {:binary, binary}, <<>>}
+    end
+
     test "nonfin control frame returns an error" do
       frame = <<0::1, 0::3, 9::4, 0::1, 0::7>>
       assert Frame.parse_frame(frame) ==

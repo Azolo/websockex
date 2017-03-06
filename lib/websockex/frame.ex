@@ -95,6 +95,14 @@ defmodule WebSockex.Frame do
                                    buffer: buffer}}
   end
 
+  # Ping and Pong with Payloads
+  for {key, opcode} <- Map.take(@opcodes, [:ping, :pong]) do
+    def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
+      <<payload::bytes-size(len), rest::bitstring>> = remaining
+      {:ok, {unquote(key), payload}, rest}
+    end
+  end
+
   # Text Frames (Check Valid UTF-8 Payloads)
   def parse_frame(<<1::1, 0::3, 1::4, 0::1, 126::7, len::16, remaining::bitstring>> = buffer) do
     parse_text_payload(len, remaining, buffer)
@@ -107,11 +115,13 @@ defmodule WebSockex.Frame do
   end
 
   # Binary Frames
-  for {key, opcode} <- Map.take(@opcodes, [:binary, :ping, :pong]) do
-    def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
-      <<payload::bytes-size(len), rest::bitstring>> = remaining
-      {:ok, {unquote(key), payload}, rest}
-    end
+  def parse_frame(<<1::1, 0::3, 2::4, 0::1, 126::7, len::16, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:binary, payload}, rest}
+  end
+  def parse_frame(<<1::1, 0::3, 2::4, 0::1, len::7, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:binary, payload}, rest}
   end
 
   defp parse_text_payload(len, remaining, buffer) do
