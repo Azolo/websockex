@@ -95,16 +95,12 @@ defmodule WebSockex.Frame do
                                    buffer: buffer}}
   end
 
-  # Check for UTF-8 in Text payloads
+  # Text Frames (Check Valid UTF-8 Payloads)
+  def parse_frame(<<1::1, 0::3, 1::4, 0::1, 126::7, len::16, remaining::bitstring>> = buffer) do
+    parse_text_payload(len, remaining, buffer)
+  end
   def parse_frame(<<1::1, 0::3, 1::4, 0::1, len::7, remaining::bitstring>> = buffer) do
-    <<payload::bytes-size(len), rest::bitstring>> = remaining
-    if String.valid?(payload) do
-      {:ok, {:text, payload}, rest}
-    else
-      {:error, %WebSockex.FrameError{reason: :invalid_utf8,
-                                     opcode: :text,
-                                     buffer: buffer}}
-    end
+    parse_text_payload(len, remaining, buffer)
   end
 
   # Don't need to check for proper UTF-8 here
@@ -112,6 +108,17 @@ defmodule WebSockex.Frame do
     def parse_frame(<<1::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
       <<payload::bytes-size(len), rest::bitstring>> = remaining
       {:ok, {unquote(key), payload}, rest}
+    end
+  end
+
+  defp parse_text_payload(len, remaining, buffer) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    if String.valid?(payload) do
+      {:ok, {:text, payload}, rest}
+    else
+      {:error, %WebSockex.FrameError{reason: :invalid_utf8,
+                                     opcode: :text,
+                                     buffer: buffer}}
     end
   end
 end
