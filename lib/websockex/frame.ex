@@ -119,6 +119,10 @@ defmodule WebSockex.Frame do
     <<payload::bytes-size(len), rest::bitstring>> = remaining
     {:ok, {:binary, payload}, rest}
   end
+  def parse_frame(<<1::1, 0::3, 2::4, 0::1, 127::7, len::64, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:binary, payload}, rest}
+  end
   def parse_frame(<<1::1, 0::3, 2::4, 0::1, len::7, remaining::bitstring>>) do
     <<payload::bytes-size(len), rest::bitstring>> = remaining
     {:ok, {:binary, payload}, rest}
