@@ -8,11 +8,17 @@ defmodule WebSockex.ClientTest do
       WebSockex.Client.start_link(url, __MODULE__, state)
     end
 
+    def catch_terminate(client, receiver) do
+      WebSockex.Client.cast(client, {:set_attr, :catch_terminate, receiver})
+    end
+
     def handle_cast({:pid_reply, pid}, state) do
       send(pid, :cast)
       {:ok, state}
     end
     def handle_cast({:set_state, state}, _state), do: {:ok, state}
+    def handle_cast(:error, _), do: raise "an error"
+    def handle_cast({:set_attr, key, attr}, state), do: {:ok, Map.put(state, key, attr)}
     def handle_cast({:get_state, pid}, state) do
       send(pid, state)
       {:ok, state}
@@ -26,6 +32,9 @@ defmodule WebSockex.ClientTest do
     def handle_info(:bad_reply, _) do
       :lemon_pie
     end
+
+    def terminate(_, %{catch_terminate: pid}), do: send(pid, :terminate)
+    def terminate(_, _), do: :ok
   end
 
   setup do
@@ -33,7 +42,7 @@ defmodule WebSockex.ClientTest do
 
     on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
 
-    {:ok, pid} = TestClient.start_link(url, :ok)
+    {:ok, pid} = TestClient.start_link(url, %{})
 
     [pid: pid, url: url]
   end
@@ -69,5 +78,25 @@ defmodule WebSockex.ClientTest do
     Process.flag(:trap_exit, true)
     send(context.pid, :bad_reply)
     assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
+  end
+
+  describe "terminate callback" do
+    setup context do
+      TestClient.catch_terminate(context.pid, self())
+    end
+
+    test "executes in a handle_info error", context do
+      Process.unlink(context.pid)
+      send(context.pid, :bad_reply)
+
+      assert_receive :terminate
+    end
+
+    test "executes in handle_cast error", context do
+      Process.unlink(context.pid)
+      WebSockex.Client.cast(context.pid, :error)
+
+      assert_receive :terminate
+    end
   end
 end

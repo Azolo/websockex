@@ -185,8 +185,8 @@ defmodule WebSockex.Client do
     websocket_loop(parent, debug, state)
   end
 
-  def system_terminate(reason, _, _, _) do
-    exit reason
+  def system_terminate(reason, parent, debug, state) do
+    terminate(reason, parent, debug, state)
   end
 
   def system_get_state(state) do
@@ -244,7 +244,12 @@ defmodule WebSockex.Client do
       end
     rescue
       exception ->
-        exit({exception, System.stacktrace})
+        terminate({exception, System.stacktrace}, parent, debug, state)
     end
+  end
+
+  defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
+    mod.terminate(reason, mod_state)
+    exit(reason)
   end
 end
