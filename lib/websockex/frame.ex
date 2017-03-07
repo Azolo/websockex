@@ -19,7 +19,9 @@ defmodule WebSockex.Frame do
   @type utf8 :: binary
 
   @type frame :: :ping | :pong | :close | {:ping, binary} | {:pong, binary} |
-                 {:close, close_code, utf8} | {:text, utf8} | {:binary, binary}
+                 {:close, close_code, utf8} | {:text, utf8} | {:binary, binary} |
+                 {:fragment, :text | :binary, binary} | {:continuation, binary} |
+                 {:fin, binary}
 
   @doc """
   Parses a bitstring and returns a frame.
@@ -126,6 +128,22 @@ defmodule WebSockex.Frame do
   def parse_frame(<<1::1, 0::3, 2::4, 0::1, len::7, remaining::bitstring>>) do
     <<payload::bytes-size(len), rest::bitstring>> = remaining
     {:ok, {:binary, payload}, rest}
+  end
+
+  # Start of Fragmented Message
+  for {key, opcode} <- Map.take(@opcodes, [:text, :binary]) do
+    def parse_frame(<<0::1, 0::3, unquote(opcode)::4, 0::1, 126::7, len::16, remaining::bitstring>>) do
+      <<payload::bytes-size(len), rest::bitstring>> = remaining
+      {:ok, {:fragment, unquote(key), payload}, rest}
+    end
+    def parse_frame(<<0::1, 0::3, unquote(opcode)::4, 0::1, 127::7, len::64, remaining::bitstring>>) do
+      <<payload::bytes-size(len), rest::bitstring>> = remaining
+      {:ok, {:fragment, unquote(key), payload}, rest}
+    end
+    def parse_frame(<<0::1, 0::3, unquote(opcode)::4, 0::1, len::7, remaining::bitstring>>) do
+      <<payload::bytes-size(len), rest::bitstring>> = remaining
+      {:ok, {:fragment, unquote(key), payload}, rest}
+    end
   end
 
   defp parse_text_payload(len, remaining, buffer) do
