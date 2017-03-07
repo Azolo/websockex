@@ -260,5 +260,38 @@ defmodule WebSockex.FrameTest do
                                         fragment: frame0,
                                         continuation: frame1}}
     end
+
+    test "Applies continuation to a text fragment" do
+      frame = <<0xFFFF::16, "Hello"::utf8>>
+      <<part::binary-size(4), rest::binary>> = frame
+      assert Frame.parse_fragment({:fragment, :text, part}, {:continuation, rest}) ==
+        {:ok, {:fragment, :text, frame}}
+    end
+    test "Finishes a text fragment" do
+      frame0 = {:fragment, :text, "Hel"}
+      frame1 = {:finish, "lo"}
+      assert Frame.parse_fragment(frame0, frame1) ==
+        {:ok, {:text, "Hello"}}
+    end
+    test "Errors with invalid utf-8 in a text fragment" do
+      frame = <<0xFFFF::16, "Hello"::utf8>>
+      <<part::binary-size(4), rest::binary>> = frame
+      assert Frame.parse_fragment({:fragment, :text, part}, {:finish, rest}) ==
+        {:error,
+          %WebSockex.FrameError{reason: :invalid_utf8,
+                                opcode: :text,
+                                buffer: frame}}
+    end
+
+    test "Applies a continuation to a binary fragment" do
+      <<part::binary-size(3), rest::binary>> = @binary
+      assert Frame.parse_fragment({:fragment, :binary, part}, {:continuation, rest}) ==
+        {:ok, {:fragment, :binary, @binary}}
+    end
+    test "Finishes a binary fragment" do
+      <<part::binary-size(3), rest::binary>> = @binary
+      assert Frame.parse_fragment({:fragment, :binary, part}, {:finish, rest}) ==
+        {:ok, {:binary, @binary}}
+    end
   end
 end

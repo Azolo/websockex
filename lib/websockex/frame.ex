@@ -177,14 +177,33 @@ defmodule WebSockex.Frame do
   @doc """
   Parses and combines two frames in a fragmented segment.
   """
-  @spec parse_fragment({:fragment, :text | :binary, binary}, {:continuation | :finish, binary}) ::
-    {:ok, {:fragment, :text | :binary, binary} | {:text | :binary, binary}} |
+  @spec parse_fragment({:fragment, :text | :binary, binary},
+                       {:continuation | :finish, binary}) ::
+    {:fragment, :text | :binary, binary} | {:text | :binary, binary} |
     {:error, %WebSockex.FragmentParseError{}}
   def parse_fragment({:fragment, _, _} = frame0, {:fragment, _, _} = frame1) do
     {:error,
       %WebSockex.FragmentParseError{reason: :two_start_frames,
                                     fragment: frame0,
                                     continuation: frame1}}
+  end
+  def parse_fragment({:fragment, type, fragment}, {:continuation, continuation}) do
+    {:ok, {:fragment, type, <<fragment::binary, continuation::binary>>}}
+  end
+  def parse_fragment({:fragment, :binary, fragment}, {:finish, continuation}) do
+    {:ok, {:binary, <<fragment::binary, continuation::binary>>}}
+  end
+  # Make sure text is valid UTF-8
+  def parse_fragment({:fragment, :text, fragment}, {:finish, continuation}) do
+    text = <<fragment::binary, continuation::binary>>
+    if String.valid?(text) do
+      {:ok, {:text, text}}
+    else
+      {:error,
+        %WebSockex.FrameError{reason: :invalid_utf8,
+                              opcode: :text,
+                              buffer: text}}
+    end
   end
 
   defp parse_text_payload(len, remaining, buffer) do
