@@ -146,6 +146,34 @@ defmodule WebSockex.Frame do
     end
   end
 
+  # Parse Fragmentation Continuation Frames
+  def parse_frame(<<0::1, 0::3, 0::4, 0::1, 126::7, len::16, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:continuation, payload}, rest}
+  end
+  def parse_frame(<<0::1, 0::3, 0::4, 0::1, 127::7, len::64, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:continuation, payload}, rest}
+  end
+  def parse_frame(<<0::1, 0::3, 0::4, 0::1, len::7, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:continuation, payload}, rest}
+  end
+
+  # Parse Fragmentation Finish Frames
+  def parse_frame(<<1::1, 0::3, 0::4, 0::1, 126::7, len::16, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:finish, payload}, rest}
+  end
+  def parse_frame(<<1::1, 0::3, 0::4, 0::1, 127::7, len::64, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:finish, payload}, rest}
+  end
+  def parse_frame(<<1::1, 0::3, 0::4, 0::1, len::7, remaining::bitstring>>) do
+    <<payload::bytes-size(len), rest::bitstring>> = remaining
+    {:ok, {:finish, payload}, rest}
+  end
+
   defp parse_text_payload(len, remaining, buffer) do
     <<payload::bytes-size(len), rest::bitstring>> = remaining
     if String.valid?(payload) do

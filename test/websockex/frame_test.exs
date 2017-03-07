@@ -155,6 +155,46 @@ defmodule WebSockex.FrameTest do
         {:ok, {:fragment, :binary, binary}, <<>>}
     end
 
+    test "parses a continuation frame in a fragmented segment" do
+      frame = <<0::1, 0::3, 0::4, 0::1, 5::7, "Hello"::utf8>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:continuation, "Hello"}, <<>>}
+    end
+    test "parses a large continuation frame in a fragmented segment" do
+      string = <<0::5000*8, "Hello">>
+      len = byte_size(string)
+      frame = <<0::1, 0::3, 0::4, 0::1, 126::7, len::16, string::binary>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:continuation, string}, <<>>}
+    end
+    test "parses a very large continuation frame in a fragmented segment" do
+      string = <<0::80_000*8, "Hello">>
+      len = byte_size(string)
+      frame = <<0::1, 0::3, 0::4, 0::1, 127::7, len::64, string::binary>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:continuation, string}, <<>>}
+    end
+
+    test "parses a finish frame in a fragmented segment" do
+      frame = <<1::1, 0::3, 0::4, 0::1, 5::7, "Hello"::utf8>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:finish, "Hello"}, <<>>}
+    end
+    test "parses a large finish frame in a fragmented segment" do
+      string = <<0::5000*8, "Hello">>
+      len = byte_size(string)
+      frame = <<1::1, 0::3, 0::4, 0::1, 126::7, len::16, string::binary>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:finish, string}, <<>>}
+    end
+    test "parses a very large finish frame in a fragmented segment" do
+      string = <<0::80_000*8, "Hello">>
+      len = byte_size(string)
+      frame = <<1::1, 0::3, 0::4, 0::1, 127::7, len::64, string::binary>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:finish, string}, <<>>}
+    end
+
     test "nonfin control frame returns an error" do
       frame = <<0::1, 0::3, 9::4, 0::1, 0::7>>
       assert Frame.parse_frame(frame) ==
