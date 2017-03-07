@@ -1,10 +1,12 @@
 defmodule WebSockex.FrameTest do
   use ExUnit.Case, async: true
   # Frame: (val::bitsize)
-  # << fin::1, 0::3, opcode::4, mask::1, payload_len::7 >>
-  # << fin::1, 0::3, [1,2,8,9,10]::4, mask::1, payload_len::7 >>
-  # << fin::1, 0::3, [1,2]::4, 0::1, 126::7, payload_len::16 >>
-  # << fin::1, 0::3, [1,2]::4, 0::1, 127::7, payload_len::64 >>
+  # << fin::1, 0::3, opcode::4, 0::1, payload_len::7 >>
+  # << 1::1, 0::3, [8,9,10]::4, 0::1, payload_len::7 >>
+  # << 1::1, 0::3, [8,9,10]::4, 0::1, payload_len::7 >>
+  # << fin::1, 0::3, [0,1,2]::4, 0::1, payload_len::7 >>
+  # << fun::1, 0::3, [0,1,2]::4, 0::1, 126::7, payload_len::16 >>
+  # << fin::1, 0::3, [0,1,2]::4, 0::1, 127::7, payload_len::64 >>
   # << fin::1, 0::3, opcode::4, 1::1, payload_len::(7-71), masking_key::32 >>
 
   alias WebSockex.{Frame}
@@ -17,9 +19,6 @@ defmodule WebSockex.FrameTest do
   @pong_frame_with_payload <<1::1, 0::3, 10::4, 0::1, 5::7, "Hello">>
 
   @binary :erlang.term_to_binary :hello
-  @binary_size byte_size @binary
-  @text_frame <<1::1, 0::3, 1::4, 0::1, 5::7, "Hello"::utf8>>
-  @binary_frame <<1::1, 0::3, 2::4, 0::1, @binary_size::7, @binary::bytes>>
 
   describe "parse_frame" do
     test "returns incomplete when the frame is less than 16 bits" do
@@ -27,7 +26,9 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(<<part>>) == :incomplete
     end
     test "handles incomplete frames with complete headers" do
-      <<part::bits-size(20), rest::bits>> = @text_frame
+      frame = <<1::1, 0::3, 1::4, 0::1, 5::7, "Hello"::utf8>>
+
+      <<part::bits-size(20), rest::bits>> = frame
       assert Frame.parse_frame(part) == :incomplete
 
       assert Frame.parse_frame(<<part::bits, rest::bits>>) ==
@@ -77,14 +78,10 @@ defmodule WebSockex.FrameTest do
     end
 
     test "parses a text frame" do
-      assert Frame.parse_frame(@text_frame) ==
+      frame = <<1::1, 0::3, 1::4, 0::1, 5::7, "Hello"::utf8>>
+      assert Frame.parse_frame(frame) ==
         {:ok, {:text, "Hello"}, <<>>}
     end
-    test "parses a binary frame" do
-      assert Frame.parse_frame(@binary_frame) ==
-        {:ok, {:binary, @binary}, <<>>}
-    end
-
     test "parses a large text frame" do
       string = <<0::5000*8, "Hello">>
       len = byte_size(string)
@@ -98,6 +95,12 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(frame) == {:ok, {:text, string}, <<>>}
     end
 
+    test "parses a binary frame" do
+      len = byte_size @binary
+      frame = <<1::1, 0::3, 2::4, 0::1, len::7, @binary::bytes>>
+      assert Frame.parse_frame(frame) ==
+        {:ok, {:binary, @binary}, <<>>}
+    end
     test "parses a large binary frame" do
       binary = <<0::5000*8, @binary::binary>>
       len = byte_size binary
