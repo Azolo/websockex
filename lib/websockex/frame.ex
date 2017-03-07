@@ -174,6 +174,19 @@ defmodule WebSockex.Frame do
     {:ok, {:finish, payload}, rest}
   end
 
+  @doc """
+  Parses and combines two frames in a fragmented segment.
+  """
+  @spec parse_fragment({:fragment, :text | :binary, binary}, {:continuation | :finish, binary}) ::
+    {:ok, {:fragment, :text | :binary, binary} | {:text | :binary, binary}} |
+    {:error, %WebSockex.FragmentParseError{}}
+  def parse_fragment({:fragment, _, _} = frame0, {:fragment, _, _} = frame1) do
+    {:error,
+      %WebSockex.FragmentParseError{reason: :two_start_frames,
+                                    fragment: frame0,
+                                    continuation: frame1}}
+  end
+
   defp parse_text_payload(len, remaining, buffer) do
     <<payload::bytes-size(len), rest::bitstring>> = remaining
     if String.valid?(payload) do

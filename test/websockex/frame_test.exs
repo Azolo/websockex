@@ -249,4 +249,16 @@ defmodule WebSockex.FrameTest do
                                        buffer: frame}}
     end
   end
+
+  describe "parse_fragment" do
+    test "Errors with two fragment starts" do
+      frame0 = {:fragment, :text, "Hello"}
+      frame1 = {:fragment, :text, "Goodbye"}
+      assert Frame.parse_fragment(frame0, frame1) ==
+        {:error,
+          %WebSockex.FragmentParseError{reason: :two_start_frames,
+                                        fragment: frame0,
+                                        continuation: frame1}}
+    end
+  end
 end

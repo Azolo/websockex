@@ -61,3 +61,15 @@ defmodule WebSockex.FrameError do
     "Frame Error: #{inspect exception}"
   end
 end
+
+defmodule WebSockex.FragmentParseError do
+  defexception [:reason, :fragment, :continuation]
+
+  def message(%__MODULE__{reason: :two_start_frames} = error) do
+    """
+    Cannot Add Another Start Frame to a Existing Fragment.
+    Fragment: #{inspect error.fragment}
+    Continuation: #{inspect error.continuation}
+    """
+  end
+end
