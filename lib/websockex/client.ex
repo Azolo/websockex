@@ -229,23 +229,21 @@ defmodule WebSockex.Client do
   end
 
   defp common_handle(parent, debug, {function, msg}, state) do
-    try do
-      case apply(state.module, function, [msg, state.module_state]) do
-            {:ok, new_state} ->
-              websocket_loop(parent, debug, %{state | module_state: new_state})
-            {:reply, _message, _new_state} ->
-              raise "Not Implemented"
-            {:close, _close_message, _new_state} ->
-              raise "Not Implemented"
-            badreply ->
-              raise %WebSockex.BadResponseError{ module: state.module,
-                function: function, args: [msg, state.module_state],
-                response: badreply}
-      end
-    rescue
-      exception ->
-        terminate({exception, System.stacktrace}, parent, debug, state)
+    case apply(state.module, function, [msg, state.module_state]) do
+      {:ok, new_state} ->
+        websocket_loop(parent, debug, %{state | module_state: new_state})
+      {:reply, _message, _new_state} ->
+        raise "Not Implemented"
+      {:close, _close_message, _new_state} ->
+        raise "Not Implemented"
+      badreply ->
+        raise %WebSockex.BadResponseError{ module: state.module,
+          function: function, args: [msg, state.module_state],
+          response: badreply}
     end
+  rescue
+    exception ->
+      terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
   defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
