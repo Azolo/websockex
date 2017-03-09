@@ -22,4 +22,9 @@ defmodule WebSockex.FrameTest do
     assert Frame.parse_fragment(frame0, frame1) ==
       Frame.Parser.parse_fragment(frame0, frame1)
   end
+
+  test "encodes a ping frame" do
+    assert {:ok, <<1::1, 0::3, 9::8, 1::1, 1::1, 0::7, _::32>>} =
+      Frame.encode_frame(:ping)
+  end
 end

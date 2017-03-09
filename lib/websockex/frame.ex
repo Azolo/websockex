@@ -19,4 +19,13 @@ defmodule WebSockex.Frame do
 
   defdelegate parse_frame(frame), to: WebSockex.Frame.Parser
   defdelegate parse_fragment(fragment, continuaion), to: WebSockex.Frame.Parser
+
+  def encode_frame(:ping) do
+    mask = create_mask()
+    <<1::1, 0::3, 9::8, 1::1, 1::1, 0::7, mask::32>>
+  end
+
+  def create_mask do
+    :crypto.strong_rand_bytes(4)
+  end
 end
