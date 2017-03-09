@@ -62,6 +62,17 @@ defmodule WebSockex.FrameError do
   end
 end
 
+defmodule WebSockex.FrameEncodeError do
+  defexception [:reason, :frame_type, :frame_payload]
+
+  def message(%__MODULE__{reason: :control_frame_too_large} = error) do
+    """
+    Control frame payload too large: Payload must be less than 126 bytes.
+    Frame: {#{inspect error.frame_type}, #{inspect error.frame_payload}}
+    """
+  end
+end
+
 defmodule WebSockex.FragmentParseError do
   defexception [:reason, :fragment, :continuation]
 

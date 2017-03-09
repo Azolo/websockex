@@ -11,6 +11,8 @@ defmodule WebSockex.FrameTest do
 
   alias WebSockex.{Frame}
 
+  @large_binary <<0::300*8, "Hello">>
+
   test "parse_frame is delegated to parser" do
     frame = <<1::1, 0::3, 9::4, 0::1, 0::7>>
     assert Frame.parse_frame(frame) == Frame.Parser.parse_frame(frame)
@@ -23,8 +25,18 @@ defmodule WebSockex.FrameTest do
       Frame.Parser.parse_fragment(frame0, frame1)
   end
 
-  test "encodes a ping frame" do
-    assert {:ok, <<1::1, 0::3, 9::8, 1::1, 1::1, 0::7, _::32>>} =
-      Frame.encode_frame(:ping)
+  describe "encode_frame" do
+    test "encodes a ping frame" do
+      assert {:ok, <<1::1, 0::3, 9::4, 1::1, 0::7, _::32>>} =
+        Frame.encode_frame(:ping)
+    end
+
+    test "raises an error with large ping frame" do
+      assert Frame.encode_frame({:ping, @large_binary}) ==
+        {:error,
+          %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                      frame_type: :ping,
+                                      frame_payload: @large_binary}}
+    end
   end
 end

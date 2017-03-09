@@ -22,7 +22,12 @@ defmodule WebSockex.Frame do
 
   def encode_frame(:ping) do
     mask = create_mask()
-    <<1::1, 0::3, 9::8, 1::1, 1::1, 0::7, mask::32>>
+    {:ok, <<1::1, 0::3, 9::4, 1::1, 0::7, mask::bytes-size(4)>>}
+  end
+  def encode_frame({:ping, <<payload::binary>>}) when byte_size(payload) > 125 do
+    {:error, %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                         frame_type: :ping,
+                                         frame_payload: payload}} 
   end
 
   def create_mask do
