@@ -22,7 +22,7 @@ defmodule WebSockex.FrameTest do
   end
   def unmask(<<key::8*4>>, <<payload::8*4, rest::binary>>, acc) do
     part = payload ^^^ key
-    unmask(<<key>>, rest, <<acc::binary, part::8*4>>)
+    unmask(<<key::8*4>>, rest, <<acc::binary, part::8*4>>)
   end
 
   @large_binary <<0::300*8, "Hello">>
@@ -45,19 +45,67 @@ defmodule WebSockex.FrameTest do
         Frame.encode_frame(:ping)
     end
     test "encodes a ping frame with a payload" do
-      payload = "Hello"
+      payload = "A longer but different string."
       len = byte_size(payload)
       assert {:ok, <<1::1, 0::3, 9::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>} =
         Frame.encode_frame({:ping, payload})
       assert unmask(mask, masked_payload) == payload
     end
 
-    test "raises an error with large ping frame" do
+    test "encodes a pong frame" do
+      assert {:ok, <<1::1, 0::3, 10::4, 1::1, 0::7, _::32>>} =
+        Frame.encode_frame(:pong)
+    end
+    test "encodes a pong frame with a payload" do
+      payload = "No"
+      len = byte_size(payload)
+      assert {:ok, <<1::1, 0::3, 10::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>} =
+        Frame.encode_frame({:pong, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+
+    test "encodes a close frame" do
+      assert {:ok, <<1::1, 0::3, 8::4, 1::1, 0::7, _::32>>} =
+        Frame.encode_frame(:close)
+    end
+    test "encodes a close frame with a payload" do
+      payload = "Hello"
+      len = byte_size(<<1000::16, payload::binary>>)
+      assert {:ok, <<1::1, 0::3, 8::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>} =
+        Frame.encode_frame({:close, 1000, payload})
+      assert unmask(mask, masked_payload) == <<1000::16, payload::binary>>
+    end
+
+    test "returns an error with large ping frame" do
       assert Frame.encode_frame({:ping, @large_binary}) ==
         {:error,
           %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
                                       frame_type: :ping,
                                       frame_payload: @large_binary}}
+    end
+    test "returns an error with large pong frame" do
+      assert Frame.encode_frame({:pong, @large_binary}) ==
+        {:error,
+          %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                      frame_type: :pong,
+                                      frame_payload: @large_binary}}
+    end
+    test "returns an error with large close frame" do
+      assert Frame.encode_frame({:close, 1000, @large_binary}) ==
+        {:error,
+          %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                      frame_type: :close,
+                                      frame_payload: @large_binary,
+                                      close_code: 1000}}
+    end
+
+    test "returns an error with close code out of range" do
+      assert Frame.encode_frame({:close, 5838, "Hello"}) ==
+        {:error,
+          %WebSockex.FrameEncodeError{reason: :close_code_out_of_range,
+                                      frame_type: :close,
+                                      frame_payload: "Hello",
+                                      close_code: 5838}}
     end
   end
 end

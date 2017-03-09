@@ -7,7 +7,6 @@ defmodule WebSockex.Frame.Parser do
              ping: 9,
              pong: 10}
 
-
   @doc """
   Parses a bitstring and returns a frame.
   """

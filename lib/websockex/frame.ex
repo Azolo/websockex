@@ -19,23 +19,60 @@ defmodule WebSockex.Frame do
                  {:fragment, :text | :binary, binary} | {:continuation, binary} |
                  {:fin, binary}
 
+  @opcodes %{text: 1,
+             binary: 2,
+             close: 8,
+             ping: 9,
+             pong: 10}
+
   defdelegate parse_frame(frame), to: WebSockex.Frame.Parser
   defdelegate parse_fragment(fragment, continuaion), to: WebSockex.Frame.Parser
 
-  def encode_frame(:ping) do
-    mask = create_mask()
-    {:ok, <<1::1, 0::3, 9::4, 1::1, 0::7, mask::bytes-size(4)>>}
+  for {key, opcode} <- Map.take(@opcodes, [:ping, :pong]) do
+    def encode_frame({unquote(key), <<payload::binary>>}) when byte_size(payload) > 125 do
+      {:error,
+        %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                    frame_type: unquote(key),
+                                    frame_payload: payload}}
+    end
+    def encode_frame(unquote(key)) do
+      mask = create_mask()
+      {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, 0::7, mask::bytes-size(4)>>}
+    end
+    def encode_frame({unquote(key), <<payload::binary>>}) do
+      mask = create_mask()
+      len = byte_size(payload)
+      masked_payload = mask(mask, payload)
+      {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
+    end
   end
-  def encode_frame({:ping, <<payload::binary>>}) when byte_size(payload) > 125 do
-    {:error, %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
-                                         frame_type: :ping,
-                                         frame_payload: payload}}
+
+  def encode_frame({:close, close_code, <<payload::binary>>})
+  when not close_code in 1000..4999 do
+      {:error,
+        %WebSockex.FrameEncodeError{reason: :close_code_out_of_range,
+                                    frame_type: :close,
+                                    frame_payload: payload,
+                                    close_code: close_code}}
   end
-  def encode_frame({:ping, <<payload::binary>>}) do
-    mask = create_mask()
-    len = byte_size(payload)
-    masked_payload = mask(mask, payload)
-    {:ok, <<1::1, 0::3, 9::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
+  def encode_frame({:close, close_code, <<payload::binary>>})
+  when byte_size(payload) > 123 do
+      {:error,
+        %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                    frame_type: :close,
+                                    frame_payload: payload,
+                                    close_code: close_code}}
+  end
+  def encode_frame(:close) do
+      mask = create_mask()
+      {:ok, <<1::1, 0::3, 8::4, 1::1, 0::7, mask::bytes-size(4)>>}
+  end
+  def encode_frame({:close, close_code, <<payload::binary>>}) do
+      mask = create_mask()
+      payload = <<close_code::16, payload::binary>>
+      len = byte_size(payload)
+      masked_payload = mask(mask, payload)
+      {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
   end
 
   defp create_mask do
@@ -50,8 +87,8 @@ defmodule WebSockex.Frame do
       <<acc::binary, masked::8*unquote(x)>>
     end
   end
-  defp mask(<<key::8*4>>, <<part::8*4, rest::binary>>, acc) do
+  defp mask(<<key::32>> = key_bin, <<part::8*4, rest::binary>>, acc) do
     masked = part ^^^ key
-    mask(<<key>>, rest, <<acc::binary, masked::8*4>>)
+    mask(key_bin, rest, <<acc::binary, masked::8*4>>)
   end
 end

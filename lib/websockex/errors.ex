@@ -63,12 +63,18 @@ defmodule WebSockex.FrameError do
 end
 
 defmodule WebSockex.FrameEncodeError do
-  defexception [:reason, :frame_type, :frame_payload]
+  defexception [:reason, :frame_type, :frame_payload, :close_code]
 
   def message(%__MODULE__{reason: :control_frame_too_large} = error) do
     """
     Control frame payload too large: Payload must be less than 126 bytes.
     Frame: {#{inspect error.frame_type}, #{inspect error.frame_payload}}
+    """
+  end
+  def message(%__MODULE__{reason: :close_code_out_of_range} = error) do
+    """
+    Close Code Out of Range: Close code must be between 1000-4999.
+    Frame: {#{inspect error.frame_type}, #{inspect error.close_code}, #{inspect error.frame_payload}}
     """
   end
 end
