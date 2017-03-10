@@ -36,11 +36,11 @@ defmodule WebSockex.Frame do
                                     frame_payload: payload}}
     end
     def encode_frame(unquote(key)) do
-      mask = create_mask()
-      {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, 0::7, mask::bytes-size(4)>>}
+      mask = create_mask_key()
+      {:ok, <<1::1, 0::3, unquote(opcode)::8, 1::1, 1::1, 0::7, mask::bytes-size(4)>>}
     end
     def encode_frame({unquote(key), <<payload::binary>>}) do
-      mask = create_mask()
+      mask = create_mask_key()
       len = byte_size(payload)
       masked_payload = mask(mask, payload)
       {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
@@ -49,33 +49,33 @@ defmodule WebSockex.Frame do
 
   def encode_frame({:close, close_code, <<payload::binary>>})
   when not close_code in 1000..4999 do
-      {:error,
-        %WebSockex.FrameEncodeError{reason: :close_code_out_of_range,
-                                    frame_type: :close,
-                                    frame_payload: payload,
-                                    close_code: close_code}}
+    {:error,
+      %WebSockex.FrameEncodeError{reason: :close_code_out_of_range,
+                                  frame_type: :close,
+                                  frame_payload: payload,
+                                  close_code: close_code}}
   end
   def encode_frame({:close, close_code, <<payload::binary>>})
   when byte_size(payload) > 123 do
-      {:error,
-        %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
-                                    frame_type: :close,
-                                    frame_payload: payload,
-                                    close_code: close_code}}
+    {:error,
+      %WebSockex.FrameEncodeError{reason: :control_frame_too_large,
+                                  frame_type: :close,
+                                  frame_payload: payload,
+                                  close_code: close_code}}
   end
   def encode_frame(:close) do
-      mask = create_mask()
-      {:ok, <<1::1, 0::3, 8::4, 1::1, 0::7, mask::bytes-size(4)>>}
+    mask = create_mask()
+    {:ok, <<1::1, 0::3, 8::4, 1::1, 0::7, mask::bytes-size(4)>>}
   end
   def encode_frame({:close, close_code, <<payload::binary>>}) do
-      mask = create_mask()
-      payload = <<close_code::16, payload::binary>>
-      len = byte_size(payload)
-      masked_payload = mask(mask, payload)
-      {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
+    mask = create_mask_key()
+    payload = <<close_code::16, payload::binary>>
+    len = byte_size(payload)
+    masked_payload = mask(mask, payload)
+    {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
   end
 
-  defp create_mask do
+  defp create_mask_key do
     :crypto.strong_rand_bytes(4)
   end
 
