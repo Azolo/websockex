@@ -91,7 +91,7 @@ defmodule WebSockex.Frame do
       size when size <= 125 -> {<<size::7>>, 7}
       size when size <= 0xFFFF -> {<<126::7, size::16>>, 16+7}
       size when size <= 0x7FFFFFFFFFFFFFFF -> {<<127::7, 0::1, size::63>>, 64+7}
-      _ -> raise "WTF, Seriously? You're trying to send a payload larger than #{0x7FFFFFFFFFFFFFFF}?"
+      _ -> raise "WTF, Seriously? You're trying to send a payload larger than #{0x7FFFFFFFFFFFFFFF} bytes?"
     end
   end
 
