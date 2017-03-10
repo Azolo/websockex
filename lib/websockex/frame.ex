@@ -37,7 +37,7 @@ defmodule WebSockex.Frame do
     end
     def encode_frame(unquote(key)) do
       mask = create_mask_key()
-      {:ok, <<1::1, 0::3, unquote(opcode)::8, 1::1, 1::1, 0::7, mask::bytes-size(4)>>}
+      {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, 0::7, mask::bytes-size(4)>>}
     end
     def encode_frame({unquote(key), <<payload::binary>>}) do
       mask = create_mask_key()
@@ -64,7 +64,7 @@ defmodule WebSockex.Frame do
                                   close_code: close_code}}
   end
   def encode_frame(:close) do
-    mask = create_mask()
+    mask = create_mask_key()
     {:ok, <<1::1, 0::3, 8::4, 1::1, 0::7, mask::bytes-size(4)>>}
   end
   def encode_frame({:close, close_code, <<payload::binary>>}) do
