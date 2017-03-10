@@ -75,11 +75,13 @@ defmodule WebSockex.Frame do
     {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary>>}
   end
 
-  def encode_frame({:text, payload}) do
-    mask = create_mask_key()
-    {payload_len_bin, payload_len}  = get_payload_length_bin(payload)
-    masked_payload = mask(mask, payload)
-    {:ok, <<1::1, 0::3, 1::4, 1::1, payload_len_bin::bits-size(payload_len), mask::bytes-size(4), masked_payload::binary>>}
+  for {key, opcode} <- Map.take(@opcodes, [:text, :binary]) do
+    def encode_frame({unquote(key), payload}) do
+      mask = create_mask_key()
+      {payload_len_bin, payload_len_size} = get_payload_length_bin(payload)
+      masked_payload = mask(mask, payload)
+      {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, payload_len_bin::bits-size(payload_len_size), mask::bytes-size(4), masked_payload::binary>>}
+    end
   end
 
   defp create_mask_key do
