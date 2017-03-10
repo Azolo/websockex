@@ -107,5 +107,27 @@ defmodule WebSockex.FrameTest do
                                       frame_payload: "Hello",
                                       close_code: 5838}}
     end
+
+    test "encodes a text frame" do
+      payload = "Lemon Pies are Pies."
+      len = byte_size payload
+      assert {:ok, <<1::1, 0::3, 1::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:text, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+    test "encodes a large text frame" do
+      payload = <<0::300*8, "Lemon Pies are Pies.">>
+      len = byte_size payload
+      assert {:ok, <<1::1, 0::3, 1::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:text, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+    test "encodes a very large text frame" do
+      payload = <<0::0xFFFFF*8, "Lemon Pies are Pies.">>
+      len = byte_size payload
+      assert {:ok, <<1::1, 0::3, 1::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:text, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
   end
 end

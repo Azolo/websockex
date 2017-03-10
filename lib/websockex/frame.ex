@@ -72,11 +72,27 @@ defmodule WebSockex.Frame do
     payload = <<close_code::16, payload::binary>>
     len = byte_size(payload)
     masked_payload = mask(mask, payload)
-    {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
+    {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary>>}
+  end
+
+  def encode_frame({:text, payload}) do
+    mask = create_mask_key()
+    {payload_len_bin, payload_len}  = get_payload_length_bin(payload)
+    masked_payload = mask(mask, payload)
+    {:ok, <<1::1, 0::3, 1::4, 1::1, payload_len_bin::bits-size(payload_len), mask::bytes-size(4), masked_payload::binary>>}
   end
 
   defp create_mask_key do
     :crypto.strong_rand_bytes(4)
+  end
+
+  defp get_payload_length_bin(payload) do
+    case byte_size(payload) do
+      size when size <= 125 -> {<<size::7>>, 7}
+      size when size <= 0xFFFF -> {<<126::7, size::16>>, 16+7}
+      size when size <= 0x7FFFFFFFFFFFFFFF -> {<<127::7, 0::1, size::63>>, 64+7}
+      _ -> raise "WTF, Seriously? You're trying to send a payload larger than #{0x7FFFFFFFFFFFFFFF}?"
+    end
   end
 
   defp mask(key, payload, acc \\ <<>>)
