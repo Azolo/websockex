@@ -197,5 +197,49 @@ defmodule WebSockex.FrameTest do
         Frame.encode_frame({:fragment, :binary, payload})
       assert unmask(mask, masked_payload) == payload
     end
+
+    test "encodes a continuation frame" do
+      payload = "Lemon Pies are Pies."
+      len = byte_size payload
+      assert {:ok, <<0::1, 0::3, 0::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:continuation, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+    test "encodes a large continuation frame" do
+      payload = <<0::300*8, "Lemon Pies are Pies.">>
+      len = byte_size payload
+      assert {:ok, <<0::1, 0::3, 0::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:continuation, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+    test "encodes a very large continuation frame" do
+      payload = <<0::0xFFFFF*8, "Lemon Pies are Pies.">>
+      len = byte_size payload
+      assert {:ok, <<0::1, 0::3, 0::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:continuation, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+
+    test "encodes a finish to a fragmented segment" do
+      payload = "Lemon Pies are Pies."
+      len = byte_size payload
+      assert {:ok, <<1::1, 0::3, 0::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:finish, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+    test "encodes a large finish to a fragmented segment" do
+      payload = <<0::300*8, "Lemon Pies are Pies.">>
+      len = byte_size payload
+      assert {:ok, <<1::1, 0::3, 0::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:finish, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
+    test "encodes a very large finish to a fragmented segment" do
+      payload = <<0::0xFFFFF*8, "Lemon Pies are Pies.">>
+      len = byte_size payload
+      assert {:ok, <<1::1, 0::3, 0::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+        Frame.encode_frame({:finish, payload})
+      assert unmask(mask, masked_payload) == payload
+    end
   end
 end

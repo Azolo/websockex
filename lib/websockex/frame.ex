@@ -91,6 +91,15 @@ defmodule WebSockex.Frame do
     end
   end
 
+  for {key, fin_bit} <- [{:continuation, 0}, {:finish, 1}] do
+    def encode_frame({unquote(key), payload}) do
+      mask = create_mask_key()
+      {payload_len_bin, payload_len_size} = get_payload_length_bin(payload)
+      masked_payload = mask(mask, payload)
+      {:ok, <<unquote(fin_bit)::1, 0::3, 0::4, 1::1, payload_len_bin::bits-size(payload_len_size), mask::bytes-size(4), masked_payload::binary>>}
+    end
+  end
+
   defp create_mask_key do
     :crypto.strong_rand_bytes(4)
   end
