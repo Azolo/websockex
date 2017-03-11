@@ -25,9 +25,12 @@ defmodule WebSockex.Frame do
              ping: 9,
              pong: 10}
 
-  defdelegate parse_frame(frame), to: WebSockex.Frame.Parser
-  defdelegate parse_fragment(fragment, continuation), to: WebSockex.Frame.Parser
-
+  @doc """
+  Encodes a frame into a binary for sending.
+  """
+  @spec encode_frame(frame) :: {:ok, binary} | {:error, %WebSockex.FrameEncodeError{}}
+  def encode_frame(frame)
+  # Encode Ping and Pong Frames
   for {key, opcode} <- Map.take(@opcodes, [:ping, :pong]) do
     def encode_frame({unquote(key), <<payload::binary>>}) when byte_size(payload) > 125 do
       {:error,
@@ -46,7 +49,7 @@ defmodule WebSockex.Frame do
       {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>}
     end
   end
-
+  # Encode Close Frames
   def encode_frame({:close, close_code, <<payload::binary>>})
   when not close_code in 1000..4999 do
     {:error,
@@ -74,7 +77,7 @@ defmodule WebSockex.Frame do
     masked_payload = mask(mask, payload)
     {:ok, <<1::1, 0::3, 8::4, 1::1, len::7, mask::bytes-size(4), masked_payload::binary>>}
   end
-
+  # Encode Text and Binary frames
   for {key, opcode} <- Map.take(@opcodes, [:text, :binary]) do
     def encode_frame({unquote(key), payload}) do
       mask = create_mask_key()
@@ -82,7 +85,7 @@ defmodule WebSockex.Frame do
       masked_payload = mask(mask, payload)
       {:ok, <<1::1, 0::3, unquote(opcode)::4, 1::1, payload_len_bin::bits-size(payload_len_size), mask::bytes-size(4), masked_payload::binary>>}
     end
-
+    # Start Fragments!
     def encode_frame({:fragment, unquote(key), payload}) do
       mask = create_mask_key()
       {payload_len_bin, payload_len_size} = get_payload_length_bin(payload)
@@ -90,7 +93,7 @@ defmodule WebSockex.Frame do
       {:ok, <<0::1, 0::3, unquote(opcode)::4, 1::1, payload_len_bin::bits-size(payload_len_size), mask::bytes-size(4), masked_payload::binary>>}
     end
   end
-
+  # Handle other Fragments
   for {key, fin_bit} <- [{:continuation, 0}, {:finish, 1}] do
     def encode_frame({unquote(key), payload}) do
       mask = create_mask_key()
