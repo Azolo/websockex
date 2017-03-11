@@ -26,7 +26,7 @@ defmodule WebSockex.Frame do
              pong: 10}
 
   defdelegate parse_frame(frame), to: WebSockex.Frame.Parser
-  defdelegate parse_fragment(fragment, continuaion), to: WebSockex.Frame.Parser
+  defdelegate parse_fragment(fragment, continuation), to: WebSockex.Frame.Parser
 
   for {key, opcode} <- Map.take(@opcodes, [:ping, :pong]) do
     def encode_frame({unquote(key), <<payload::binary>>}) when byte_size(payload) > 125 do
