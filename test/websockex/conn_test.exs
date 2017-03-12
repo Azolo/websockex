@@ -7,7 +7,7 @@ defmodule WebSockex.ConnTest do
     on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
 
     uri = URI.parse(url)
-    conn = WebSockex.Conn.open_socket(uri)
+    {:ok, conn} = WebSockex.Conn.open_socket(uri)
 
     [url: url, uri: uri, conn: conn]
   end
@@ -29,6 +29,13 @@ defmodule WebSockex.ConnTest do
 
     assert WebSockex.Conn.handle_response(conn) ==
       {:error, %WebSockex.Conn.RequestError{code: 400, message: "Bad Request"}}
+  end
+
+  test "socket_send returns a send error when fails to send", %{conn: conn} do
+    socket = conn.socket
+    :ok = conn.conn_mod.close(socket)
+    assert WebSockex.Conn.socket_send(conn, "Gonna Fail") ==
+      {:error, %WebSockex.ConnError{original: :closed}}
   end
 
   test "build_request" do

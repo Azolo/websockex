@@ -28,7 +28,10 @@ defmodule WebSockex.Conn do
   """
   @spec socket_send(__MODULE__.t, binary) :: :ok | {:error, reason :: term}
   def socket_send(conn, message) do
-    conn.conn_mod.send(conn.socket, message)
+    case conn.conn_mod.send(conn.socket, message) do
+      :ok -> :ok
+      {:error, error} -> {:error, %WebSockex.ConnError{original: error}}
+    end
   end
 
   @doc """
