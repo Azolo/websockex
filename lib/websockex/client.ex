@@ -232,12 +232,18 @@ defmodule WebSockex.Client do
     case apply(state.module, function, [msg, state.module_state]) do
       {:ok, new_state} ->
         websocket_loop(parent, debug, %{state | module_state: new_state})
-      {:reply, _message, _new_state} ->
-        raise "Not Implemented"
-      {:close, _close_message, _new_state} ->
+      {:reply, frame, new_state} ->
+        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
+             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
+               websocket_loop(parent, debug, %{state | module_state: new_state})
+             else
+               {:error, error} ->
+                 raise error
+             end
+      {:close, new_state} ->
         raise "Not Implemented"
       badreply ->
-        raise %WebSockex.BadResponseError{ module: state.module,
+        raise %WebSockex.BadResponseError{module: state.module,
           function: function, args: [msg, state.module_state],
           response: badreply}
     end

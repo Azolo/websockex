@@ -65,7 +65,11 @@ defmodule WebSockex.TestSocket do
     :ok
   end
 
-  def websocket_handle(_, req, state), do: {:ok, req, state}
+  def websocket_handle({:binary, unquote(:erlang.term_to_binary(:cast_msg))}, req, state) do
+    send(state.pid, :cast_msg)
+    {:ok, req, state}
+  end
+
   def websocket_info(:ping, req, state), do: {:reply, :ping, req, state}
   def websocket_info(:payload_ping, req, state), do: {:reply, {:ping, "Llama and Lambs"}, req, state}
   def websocket_info(_, req, state), do: {:ok, req, state}

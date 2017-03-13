@@ -23,12 +23,12 @@ defmodule WebSockex.ClientTest do
       send(pid, state)
       {:ok, state}
     end
+    def handle_cast({:send, frame}, state), do: {:reply, frame, state}
 
     def handle_info({:pid_reply, pid}, state) do
       send(pid, :info)
       {:ok, state}
     end
-
     def handle_info(:bad_reply, _) do
       :lemon_pie
     end
@@ -43,8 +43,9 @@ defmodule WebSockex.ClientTest do
     on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
 
     {:ok, pid} = TestClient.start_link(url, %{})
+    server_pid = WebSockex.TestServer.receive_socket_pid
 
-    [pid: pid, url: url]
+    [pid: pid, url: url, server_pid: server_pid]
   end
 
   test "handle changes state", context do
@@ -98,5 +99,12 @@ defmodule WebSockex.ClientTest do
 
       assert_receive :terminate
     end
+  end
+
+  test "handle_cast can reply with a message", context do
+    message = :erlang.term_to_binary(:cast_msg)
+    WebSockex.Client.cast(context.pid, {:send, {:binary, message}})
+
+    assert_receive :cast_msg
   end
 end
