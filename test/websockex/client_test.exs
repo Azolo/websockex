@@ -24,6 +24,7 @@ defmodule WebSockex.ClientTest do
       {:ok, state}
     end
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
+    def handle_cast(:close, state), do: {:close, state}
 
     def handle_info({:pid_reply, pid}, state) do
       send(pid, :info)
@@ -106,5 +107,11 @@ defmodule WebSockex.ClientTest do
     WebSockex.Client.cast(context.pid, {:send, {:binary, message}})
 
     assert_receive :cast_msg
+  end
+
+  test "handle_cast can close the connection", context do
+    WebSockex.Client.cast(context.pid, :close)
+
+    assert_receive :normal_remote_closed
   end
 end

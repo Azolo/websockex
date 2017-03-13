@@ -241,7 +241,13 @@ defmodule WebSockex.Client do
                  raise error
              end
       {:close, new_state} ->
-        raise "Not Implemented"
+        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(:close),
+             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
+               terminate(:normal, parent, debug, %{state | module_state: new_state})
+             else
+               {:error, error} ->
+                 raise error
+             end
       badreply ->
         raise %WebSockex.BadResponseError{module: state.module,
           function: function, args: [msg, state.module_state],
