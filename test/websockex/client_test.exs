@@ -26,6 +26,8 @@ defmodule WebSockex.ClientTest do
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
 
+    def handle_info({:send, frame}, state), do: {:reply, frame, state}
+    def handle_info(:close, state), do: {:close, state}
     def handle_info({:pid_reply, pid}, state) do
       send(pid, :info)
       {:ok, state}
@@ -60,26 +62,46 @@ defmodule WebSockex.ClientTest do
     assert_receive ^rand_number
   end
 
-  test "handle_cast", context do
-    WebSockex.Client.cast(context.pid, {:pid_reply, self()})
+  describe "handle_cast callback" do
+    test "is called", context do
+      WebSockex.Client.cast(context.pid, {:pid_reply, self()})
 
-    assert_receive :cast
+      assert_receive :cast
+    end
+
+    test "can reply with a message", context do
+      message = :erlang.term_to_binary(:cast_msg)
+      WebSockex.Client.cast(context.pid, {:send, {:binary, message}})
+
+      assert_receive :cast_msg
+    end
+
+    test "can close the connection", context do
+      WebSockex.Client.cast(context.pid, :close)
+
+      assert_receive :normal_remote_closed
+    end
   end
 
-  test "handle_info", context do
-    send(context.pid, {:pid_reply, self()})
+  describe "handle_info callback" do
+    test "is called", context do
+      send(context.pid, {:pid_reply, self()})
 
-    assert_receive :info
-  end
+      assert_receive :info
+    end
 
-  test "informative error with bad url" do
-    assert TestClient.start_link("lemon_pie", :ok) == {:error, %WebSockex.URLError{url: "lemon_pie"}}
-  end
+    test "handle_info can reply with a message", context do
+      message = :erlang.term_to_binary(:cast_msg)
+      send(context.pid, {:send, {:binary, message}})
 
-  test "common_handle exits with a BadResponseError", context do
-    Process.flag(:trap_exit, true)
-    send(context.pid, :bad_reply)
-    assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
+      assert_receive :cast_msg
+    end
+
+    test "handle_info can close the connection", context do
+      send(context.pid, :close)
+
+      assert_receive :normal_remote_closed
+    end
   end
 
   describe "terminate callback" do
@@ -102,16 +124,13 @@ defmodule WebSockex.ClientTest do
     end
   end
 
-  test "handle_cast can reply with a message", context do
-    message = :erlang.term_to_binary(:cast_msg)
-    WebSockex.Client.cast(context.pid, {:send, {:binary, message}})
-
-    assert_receive :cast_msg
+  test "Displays an informative error with a bad url" do
+    assert TestClient.start_link("lemon_pie", :ok) == {:error, %WebSockex.URLError{url: "lemon_pie"}}
   end
 
-  test "handle_cast can close the connection", context do
-    WebSockex.Client.cast(context.pid, :close)
-
-    assert_receive :normal_remote_closed
+  test "Raises a BadResponseError when a non valid callback response is given", context do
+    Process.flag(:trap_exit, true)
+    send(context.pid, :bad_reply)
+    assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
   end
 end

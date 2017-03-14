@@ -68,8 +68,8 @@ defmodule WebSockex.TestSocket do
     :ok
   end
 
-  def websocket_handle({:binary, unquote(:erlang.term_to_binary(:cast_msg))}, req, state) do
-    send(state.pid, :cast_msg)
+  def websocket_handle({:binary, msg}, req, state) do
+    send(state.pid, :erlang.binary_to_term(msg))
     {:ok, req, state}
   end
 
