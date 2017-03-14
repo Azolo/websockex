@@ -237,17 +237,17 @@ defmodule WebSockex.Client do
       {:system, from, req} ->
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
       {:"$websockex_cast", msg} ->
-        common_handle(parent, debug, {:handle_cast, msg}, state)
+        common_handle({:handle_cast, msg}, parent, debug, state)
       {^transport, ^socket, message} ->
         with {:ok, frame, _} <- WebSockex.Frame.parse_frame(message) do
           handle_frame(frame, parent, debug, state)
         end
       msg ->
-        common_handle(parent, debug, {:handle_info, msg}, state)
+        common_handle({:handle_info, msg}, parent, debug, state)
     end
   end
 
-  defp common_handle(parent, debug, {function, msg}, state) do
+  defp common_handle({function, msg}, parent, debug, state) do
     case apply(state.module, function, [msg, state.module_state]) do
       {:ok, new_state} ->
         websocket_loop(parent, debug, %{state | module_state: new_state})
@@ -286,10 +286,10 @@ defmodule WebSockex.Client do
   end
 
   defp handle_frame(:ping, parent, debug, state) do
-    common_handle(parent, debug, {:handle_ping, :ping}, state)
+    common_handle({:handle_ping, :ping}, parent, debug, state)
   end
   defp handle_frame({:ping, msg}, parent, debug, state) do
-    common_handle(parent, debug, {:handle_ping, {:ping, msg}}, state)
+    common_handle({:handle_ping, {:ping, msg}}, parent, debug, state)
   end
 
   defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
