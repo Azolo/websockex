@@ -142,6 +142,18 @@ defmodule WebSockex.ClientTest do
     end
   end
 
+  test "can handle a ping frame", context do
+    send(context.server_pid, :send_ping)
+
+    assert_receive :received_pong
+  end
+
+  test "can handle a ping frame with a payload", context do
+    send(context.server_pid, :send_payload_ping)
+
+    assert_receive :received_payload_pong
+  end
+
   test "Displays an informative error with a bad url" do
     assert TestClient.start_link("lemon_pie", :ok) == {:error, %WebSockex.URLError{url: "lemon_pie"}}
   end

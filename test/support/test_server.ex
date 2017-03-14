@@ -58,7 +58,7 @@ defmodule WebSockex.TestSocket do
 
   def websocket_init(_, req, [pid]) do
     send(pid, self())
-    {:ok, req, %{pid: pid, s: 0}}
+    {:ok, req, %{pid: pid}}
   end
 
   def websocket_terminate({:remote, :closed}, _, state) do
@@ -75,8 +75,19 @@ defmodule WebSockex.TestSocket do
     send(state.pid, :erlang.binary_to_term(msg))
     {:ok, req, state}
   end
+  def websocket_handle({:pong, ""}, req, state) do
+    send(state.pid, :received_pong)
+    {:ok, req, state}
+  end
+  def websocket_handle({:pong, payload}, req, %{ping_payload: ping_payload} = state) when payload == ping_payload do
+    send(state.pid, :received_payload_pong)
+    {:ok, req, state}
+  end
 
-  def websocket_info(:ping, req, state), do: {:reply, :ping, req, state}
-  def websocket_info(:payload_ping, req, state), do: {:reply, {:ping, "Llama and Lambs"}, req, state}
+  def websocket_info(:send_ping, req, state), do: {:reply, :ping, req, state}
+  def websocket_info(:send_payload_ping, req, state) do
+    payload = "Llama and Lambs"
+    {:reply, {:ping, payload}, req, Map.put(state, :ping_payload, payload)}
+  end
   def websocket_info(_, req, state), do: {:ok, req, state}
 end
