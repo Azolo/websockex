@@ -35,8 +35,7 @@ defmodule WebSockex.Client do
 
   A `:normal` reason is the same as a `1000` reason.
   """
-  @type close_reason :: {:remote, :normal | integer | close_message} | :normal |
-    {:error, term} | {:local, integer, close_message}
+  @type close_reason :: {:remote | :local, :normal} | {:remote | :local, :normal | integer, close_message} | {:error, term}
 
   @doc """
   Invoked after connection is established.
@@ -262,7 +261,7 @@ defmodule WebSockex.Client do
       {:close, new_state} ->
         with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(:close),
              :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
-          terminate(:normal, parent, debug, %{state | module_state: new_state})
+          terminate({:local, :normal}, parent, debug, %{state | module_state: new_state})
         else
           {:error, error} ->
             raise error
@@ -294,6 +293,13 @@ defmodule WebSockex.Client do
 
   defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
     mod.terminate(reason, mod_state)
-    exit(reason)
+    case reason do
+      {_, :normal} ->
+        exit(:normal)
+      {_, 1000, _} ->
+        exit(:normal)
+      _ ->
+        exit(reason)
+    end
   end
 end

@@ -38,6 +38,7 @@ defmodule WebSockex.ClientTest do
       :lemon_pie
     end
 
+    def terminate({:local, :normal}, %{catch_terminate: pid}), do: send(pid, :normal_close_terminate)
     def terminate(_, %{catch_terminate: pid}), do: send(pid, :terminate)
     def terminate(_, _), do: :ok
   end
@@ -139,6 +140,12 @@ defmodule WebSockex.ClientTest do
       WebSockex.Client.cast(context.pid, :error)
 
       assert_receive :terminate
+    end
+
+    test "executes in a frame close", context do
+      WebSockex.Client.cast(context.pid, :close)
+
+      assert_receive :normal_close_terminate
     end
   end
 
