@@ -10,7 +10,7 @@ defmodule WebSockex.Conn.RequestError do
   defexception [:code, :message]
 
   def message(%__MODULE__{code: code, message: message}) do
-    "Didn't get a proper response from the server. The response was: #{code} #{message}"
+    "Didn't get a proper response from the server. The response was: #{inspect code} #{inspect message}"
   end
 end
 
@@ -27,8 +27,8 @@ defmodule WebSockex.HandshakeError do
 
   def message(%__MODULE__{challenge: challenge, response: response}) do
     ["Handshake Failed: Response didn't match challenge.",
-     "Response: #{response}",
-     "Challenge: #{challenge}"]
+     "Response: #{inspect response}",
+     "Challenge: #{inspect challenge}"]
     |> Enum.join("\n")
   end
 end
@@ -38,7 +38,7 @@ defmodule WebSockex.BadResponseError do
   defexception [:response, :module, :function, :args]
 
   def message(%__MODULE__{} = error) do
-    "Bad Response: Got #{error.response} from #{Exception.format_mfa(error.module, error.function, error.args)}"
+    "Bad Response: Got #{inspect error.response} from #{inspect Exception.format_mfa(error.module, error.function, error.args)}"
   end
 end
 
