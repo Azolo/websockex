@@ -11,6 +11,9 @@ defmodule WebSockex.ClientTest do
     def catch_terminate(client, receiver) do
       WebSockex.Client.cast(client, {:set_attr, :catch_terminate, receiver})
     end
+    def catch_pong(client, receiver) do
+      WebSockex.Client.cast(client, {:set_attr, :catch_pong, receiver})
+    end
 
     def handle_cast({:pid_reply, pid}, state) do
       send(pid, :cast)
@@ -36,6 +39,16 @@ defmodule WebSockex.ClientTest do
     end
     def handle_info(:bad_reply, _) do
       :lemon_pie
+    end
+
+    # Implicitly test default implementation defined with using through super
+    def handle_pong(:pong = frame, %{catch_pong: pid} = state) do
+      send(pid, :caught_pong)
+      super(frame, state)
+    end
+    def handle_pong({:pong, msg} = frame, %{catch_pong: pid} = state) do
+      send(pid, {:caught_payload_pong, msg})
+      super(frame, state)
     end
 
     def terminate({:local, :normal}, %{catch_terminate: pid}), do: send(pid, :normal_close_terminate)
@@ -149,16 +162,34 @@ defmodule WebSockex.ClientTest do
     end
   end
 
-  test "can handle a ping frame", context do
-    send(context.server_pid, :send_ping)
+  describe "handle_ping callback" do
+    test "can handle a ping frame", context do
+      send(context.server_pid, :send_ping)
 
-    assert_receive :received_pong
+      assert_receive :received_pong
+    end
+
+    test "can handle a ping frame with a payload", context do
+      send(context.server_pid, :send_payload_ping)
+
+      assert_receive :received_payload_pong
+    end
   end
 
-  test "can handle a ping frame with a payload", context do
-    send(context.server_pid, :send_payload_ping)
+  describe "handle_pong callback" do
+    test "can handle a pong frame", context do
+      TestClient.catch_pong(context.pid, self())
+      WebSockex.Client.cast(context.pid, {:send, :ping})
 
-    assert_receive :received_payload_pong
+      assert_receive :caught_pong
+    end
+
+    test "can handle a pong frame with a payload", context do
+      TestClient.catch_pong(context.pid, self())
+      WebSockex.Client.cast(context.pid, {:send, {:ping, "bananas"}})
+
+      assert_receive {:caught_payload_pong, "bananas"}
+    end
   end
 
   test "Displays an informative error with a bad url" do

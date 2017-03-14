@@ -83,6 +83,16 @@ defmodule WebSockex.Client do
   @callback handle_ping(:ping | {:ping, binary}, state :: term) ::
     {:ok, new_state}
     | {:reply, message, new_state}
+    | {:close, new_state}
+    | {:close, close_message, new_state} when new_state: term
+
+  @doc """
+  Invoked when the Websocket receives a pong frame.
+  """
+  @callback handle_pong(:pong | {:pong, binary}, state :: term) ::
+    {:ok, new_state}
+    | {:reply, message, new_state}
+    | {:close, new_state}
     | {:close, close_message, new_state} when new_state: term
 
   @doc """
@@ -98,7 +108,8 @@ defmodule WebSockex.Client do
     {:ok, new_state :: term}
     | {:error, reason :: term}
 
-  @optional_callbacks [handle_disconnect: 2, handle_ping: 2, terminate: 2, code_change: 3]
+  @optional_callbacks [handle_disconnect: 2, handle_ping: 2, handle_pong: 2, terminate: 2,
+                       code_change: 3]
 
   defmacro __using__(_) do
     quote location: :keep do
@@ -140,13 +151,17 @@ defmodule WebSockex.Client do
       end
 
       @doc false
+      def handle_pong(:pong, state), do: {:ok, state}
+      def handle_pong({:pong, _}, state), do: {:ok, state}
+
+      @doc false
       def terminate(_close_reason, _state), do: :ok
 
       @doc false
       def code_change(_old_vsn, state, _extra), do: {:ok, state}
 
       defoverridable [init: 1, handle_msg: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
-                      handle_disconnect: 2, terminate: 2, code_change: 3]
+                      handle_pong: 2, handle_disconnect: 2, terminate: 2, code_change: 3]
     end
   end
 
@@ -289,6 +304,12 @@ defmodule WebSockex.Client do
   end
   defp handle_frame({:ping, msg}, parent, debug, state) do
     common_handle({:handle_ping, {:ping, msg}}, parent, debug, state)
+  end
+  defp handle_frame(:pong, parent, debug, state) do
+    common_handle({:handle_pong, :pong}, parent, debug, state)
+  end
+  defp handle_frame({:pong, msg}, parent, debug, state) do
+    common_handle({:handle_pong, {:pong, msg}}, parent, debug, state)
   end
 
   defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
