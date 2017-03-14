@@ -25,9 +25,11 @@ defmodule WebSockex.ClientTest do
     end
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
+    def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
 
     def handle_info({:send, frame}, state), do: {:reply, frame, state}
     def handle_info(:close, state), do: {:close, state}
+    def handle_info({:close, code, reason}, state), do: {:close, {code, reason}, state}
     def handle_info({:pid_reply, pid}, state) do
       send(pid, :info)
       {:ok, state}
@@ -81,6 +83,14 @@ defmodule WebSockex.ClientTest do
 
       assert_receive :normal_remote_closed
     end
+
+    test "can close the connection with a code and a message", context do
+      Process.flag(:trap_exit, true)
+      WebSockex.Client.cast(context.pid, {:close, 4012, "Test Close"})
+
+      assert_receive {:EXIT, _, {:local, 4012, "Test Close"}}
+      assert_receive {4012, "Test Close"}
+    end
   end
 
   describe "handle_info callback" do
@@ -90,17 +100,25 @@ defmodule WebSockex.ClientTest do
       assert_receive :info
     end
 
-    test "handle_info can reply with a message", context do
-      message = :erlang.term_to_binary(:cast_msg)
+    test "can reply with a message", context do
+      message = :erlang.term_to_binary(:info_msg)
       send(context.pid, {:send, {:binary, message}})
 
-      assert_receive :cast_msg
+      assert_receive :info_msg
     end
 
-    test "handle_info can close the connection", context do
+    test "can close the connection normally", context do
       send(context.pid, :close)
 
       assert_receive :normal_remote_closed
+    end
+
+    test "can close the connection with a code and a message", context do
+      Process.flag(:trap_exit, true)
+      send(context.pid, {:close, 4012, "Test Close"})
+
+      assert_receive {:EXIT, _, {:local, 4012, "Test Close"}}
+      assert_receive {4012, "Test Close"}
     end
   end
 

@@ -64,6 +64,9 @@ defmodule WebSockex.TestSocket do
   def websocket_terminate({:remote, :closed}, _, state) do
     send(state.pid, :normal_remote_closed)
   end
+  def websocket_terminate({:remote, close_code, reason}, _, state) do
+    send(state.pid, {close_code, reason})
+  end
   def websocket_terminate(_, _, _) do
     :ok
   end
