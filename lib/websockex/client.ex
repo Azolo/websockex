@@ -261,6 +261,22 @@ defmodule WebSockex.Client do
     end
   end
 
+  defp handle_frame(:ping, parent, debug, state) do
+    common_handle({:handle_ping, :ping}, parent, debug, state)
+  end
+  defp handle_frame({:ping, msg}, parent, debug, state) do
+    common_handle({:handle_ping, {:ping, msg}}, parent, debug, state)
+  end
+  defp handle_frame(:pong, parent, debug, state) do
+    common_handle({:handle_pong, :pong}, parent, debug, state)
+  end
+  defp handle_frame({:pong, msg}, parent, debug, state) do
+    common_handle({:handle_pong, {:pong, msg}}, parent, debug, state)
+  end
+  defp handle_frame(:close, parent, debug, state) do
+    handle_close({:remote, :normal}, parent, debug, state)
+  end
+
   defp common_handle({function, msg}, parent, debug, state) do
     case apply(state.module, function, [msg, state.module_state]) do
       {:ok, new_state} ->
@@ -299,17 +315,24 @@ defmodule WebSockex.Client do
       terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
-  defp handle_frame(:ping, parent, debug, state) do
-    common_handle({:handle_ping, :ping}, parent, debug, state)
+  defp handle_close({:remote, _} = reason, parent, debug, state) do
+    handle_remote_close(reason, parent, debug, state)
   end
-  defp handle_frame({:ping, msg}, parent, debug, state) do
-    common_handle({:handle_ping, {:ping, msg}}, parent, debug, state)
+  defp handle_close({:remote, _, _} = reason, parent, debug, state) do
+    handle_remote_close(reason, parent, debug, state)
   end
-  defp handle_frame(:pong, parent, debug, state) do
-    common_handle({:handle_pong, :pong}, parent, debug, state)
-  end
-  defp handle_frame({:pong, msg}, parent, debug, state) do
-    common_handle({:handle_pong, {:pong, msg}}, parent, debug, state)
+
+  defp handle_disconnect(reason, parent, debug, state) do
+    case apply(state.module, :handle_disconnect, [reason, state.module_state]) do
+      {:close, new_state} ->
+        terminate(reason, parent, debug, %{state | module_state: new_state})
+      {:reconnect, _new_state} ->
+        raise "Not Implemented"
+      badreply ->
+        raise %WebSockex.BadResponseError{module: state.module,
+          function: :handle_disconnect, args: [reason, state.module_state],
+          response: badreply}
+    end
   end
 
   defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
@@ -322,5 +345,33 @@ defmodule WebSockex.Client do
       _ ->
         exit(reason)
     end
+  end
+
+  # If the socket is already closed then that's ok, but the spec says to send
+  # the close frame back in response to receiving it.
+  defp handle_remote_close(reason, parent, debug, state) do
+    case send_close_frame(reason, state.conn) do
+      :ok -> :ok
+      {:error, %WebSockex.ConnError{original: :closed}} -> :ok
+      {:error, error} ->
+        raise error
+    end
+
+    new_conn = WebSockex.Conn.close_socket(state.conn)
+    state = %{state | conn: new_conn}
+
+    handle_disconnect(reason, parent, debug, state)
+  end
+
+  defp send_close_frame(reason, conn) do
+    with {:ok, binary_frame} <- build_close_frame(reason),
+    do: WebSockex.Conn.socket_send(conn, binary_frame)
+  end
+
+  defp build_close_frame({_, :normal}) do
+    WebSockex.Frame.encode_frame(:close)
+  end
+  defp build_close_frame({_, code, msg}) do
+    WebSockex.Frame.encode_frame({:close, code, msg})
   end
 end

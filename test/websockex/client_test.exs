@@ -8,11 +8,9 @@ defmodule WebSockex.ClientTest do
       WebSockex.Client.start_link(url, __MODULE__, state)
     end
 
-    def catch_terminate(client, receiver) do
-      WebSockex.Client.cast(client, {:set_attr, :catch_terminate, receiver})
-    end
-    def catch_pong(client, receiver) do
-      WebSockex.Client.cast(client, {:set_attr, :catch_pong, receiver})
+    def catch_attr(atom, client, receiver) do
+      attr = "catch_" <> Atom.to_string(atom)
+      WebSockex.Client.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
     def handle_cast({:pid_reply, pid}, state) do
@@ -49,6 +47,11 @@ defmodule WebSockex.ClientTest do
     def handle_pong({:pong, msg} = frame, %{catch_pong: pid} = state) do
       send(pid, {:caught_payload_pong, msg})
       super(frame, state)
+    end
+
+    def handle_disconnect({_, :normal} = reason, %{catch_disconnect: pid} = state) do
+      send(pid, :caught_disconnect)
+      super(reason, state)
     end
 
     def terminate({:local, :normal}, %{catch_terminate: pid}), do: send(pid, :normal_close_terminate)
@@ -138,7 +141,7 @@ defmodule WebSockex.ClientTest do
 
   describe "terminate callback" do
     setup context do
-      TestClient.catch_terminate(context.pid, self())
+      TestClient.catch_attr(:terminate, context.pid, self())
     end
 
     test "executes in a handle_info error", context do
@@ -178,17 +181,26 @@ defmodule WebSockex.ClientTest do
 
   describe "handle_pong callback" do
     test "can handle a pong frame", context do
-      TestClient.catch_pong(context.pid, self())
+      TestClient.catch_attr(:pong, context.pid, self())
       WebSockex.Client.cast(context.pid, {:send, :ping})
 
       assert_receive :caught_pong
     end
 
     test "can handle a pong frame with a payload", context do
-      TestClient.catch_pong(context.pid, self())
+      TestClient.catch_attr(:pong, context.pid, self())
       WebSockex.Client.cast(context.pid, {:send, {:ping, "bananas"}})
 
       assert_receive {:caught_payload_pong, "bananas"}
+    end
+  end
+
+  describe "handle_disconnect callback" do
+    test "is invoked when receiving a close frame", context do
+      TestClient.catch_attr(:disconnect, context.pid, self())
+      send(context.server_pid, :close)
+
+      assert_receive :caught_disconnect, 5000
     end
   end
 

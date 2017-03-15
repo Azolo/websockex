@@ -90,5 +90,6 @@ defmodule WebSockex.TestSocket do
     payload = "Llama and Lambs"
     {:reply, {:ping, payload}, req, Map.put(state, :ping_payload, payload)}
   end
+  def websocket_info(:close, req, state), do: {:reply, :close, req, state}
   def websocket_info(_, req, state), do: {:ok, req, state}
 end
