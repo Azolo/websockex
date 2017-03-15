@@ -31,6 +31,21 @@ defmodule WebSockex.ConnTest do
       {:error, %WebSockex.Conn.RequestError{code: 400, message: "Bad Request"}}
   end
 
+  test "close_socket", context do
+    socket = context.conn.socket
+
+    assert {:ok, _} = :inet.port(socket)
+    assert WebSockex.Conn.close_socket(context.conn) == %{context.conn | socket: nil}
+    assert :inet.port(socket) == {:error, :einval}
+  end
+
+  test "close_socket with nil socket", context do
+    conn = %{context.conn | socket: nil}
+    assert conn.socket == nil
+
+    assert WebSockex.Conn.close_socket(conn) == conn
+  end
+
   test "socket_send returns a send error when fails to send", %{conn: conn} do
     socket = conn.socket
     :ok = conn.conn_mod.close(socket)

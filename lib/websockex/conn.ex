@@ -56,6 +56,20 @@ defmodule WebSockex.Conn do
   end
 
   @doc """
+  Closes the socket and returns the Conn map without the socket.
+
+  When the `:socket` field is `nil` in the struct, the function just returns
+  the struct as is.
+  """
+  @spec close_socket(__MODULE__.t) :: __MODULE__.t
+  def close_socket(conn)
+  def close_socket(%{socket: nil} = conn), do: conn
+  def close_socket(%{socket: socket} = conn) do
+    :inet.close(socket)
+    %{conn | socket: nil}
+  end
+
+  @doc """
   Builds the request to be sent along the newly opened socket.
 
   The key parameter is part of the websocket handshake process.
