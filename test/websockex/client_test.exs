@@ -200,7 +200,7 @@ defmodule WebSockex.ClientTest do
       TestClient.catch_attr(:disconnect, context.pid, self())
       send(context.server_pid, :close)
 
-      assert_receive :caught_disconnect, 5000
+      assert_receive :caught_disconnect
     end
   end
 
