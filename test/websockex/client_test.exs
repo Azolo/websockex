@@ -53,6 +53,10 @@ defmodule WebSockex.ClientTest do
       send(pid, :caught_disconnect)
       super(reason, state)
     end
+    def handle_disconnect({_, code, reason}, %{catch_disconnect: pid} = state) do
+      send(pid, {:caught_disconnect, code, reason})
+      {:ok, state}
+    end
 
     def terminate({:local, :normal}, %{catch_terminate: pid}), do: send(pid, :normal_close_terminate)
     def terminate(_, %{catch_terminate: pid}), do: send(pid, :terminate)
@@ -201,6 +205,13 @@ defmodule WebSockex.ClientTest do
       send(context.server_pid, :close)
 
       assert_receive :caught_disconnect
+    end
+
+    test "is invoked when receiving a close frame with a payload", context do
+      TestClient.catch_attr(:disconnect, context.pid, self())
+      send(context.server_pid, {:close, 4025, "Testing"})
+
+      assert_receive {:caught_disconnect, 4025, "Testing"}
     end
   end
 

@@ -91,5 +91,8 @@ defmodule WebSockex.TestSocket do
     {:reply, {:ping, payload}, req, Map.put(state, :ping_payload, payload)}
   end
   def websocket_info(:close, req, state), do: {:reply, :close, req, state}
+  def websocket_info({:close, code, reason}, req, state) do
+    {:reply, {:close, code, reason}, req, state}
+  end
   def websocket_info(_, req, state), do: {:ok, req, state}
 end

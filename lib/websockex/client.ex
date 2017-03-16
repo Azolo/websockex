@@ -276,6 +276,9 @@ defmodule WebSockex.Client do
   defp handle_frame(:close, parent, debug, state) do
     handle_close({:remote, :normal}, parent, debug, state)
   end
+  defp handle_frame({:close, code, reason}, parent, debug, state) do
+    handle_close({:remote, code, reason}, parent, debug, state)
+  end
 
   defp common_handle({function, msg}, parent, debug, state) do
     case apply(state.module, function, [msg, state.module_state]) do
