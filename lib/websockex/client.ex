@@ -74,7 +74,7 @@ defmodule WebSockex.Client do
   Invoked when the WebSocket disconnects from the server.
   """
   @callback handle_disconnect(close_reason, state :: term) ::
-    {:close, state}
+    {:ok, state}
     | {:reconnect, state} when state: term
 
   @doc """
@@ -139,7 +139,7 @@ defmodule WebSockex.Client do
 
       @doc false
       def handle_disconnect(_close_reason, state) do
-        {:close, state}
+        {:ok, state}
       end
 
       @doc false
@@ -324,7 +324,7 @@ defmodule WebSockex.Client do
 
   defp handle_disconnect(reason, parent, debug, state) do
     case apply(state.module, :handle_disconnect, [reason, state.module_state]) do
-      {:close, new_state} ->
+      {:ok, new_state} ->
         terminate(reason, parent, debug, %{state | module_state: new_state})
       {:reconnect, _new_state} ->
         raise "Not Implemented"
@@ -347,9 +347,9 @@ defmodule WebSockex.Client do
     end
   end
 
-  # If the socket is already closed then that's ok, but the spec says to send
-  # the close frame back in response to receiving it.
   defp handle_remote_close(reason, parent, debug, state) do
+    # If the socket is already closed then that's ok, but the spec says to send
+    # the close frame back in response to receiving it.
     case send_close_frame(reason, state.conn) do
       :ok -> :ok
       {:error, %WebSockex.ConnError{original: :closed}} -> :ok
