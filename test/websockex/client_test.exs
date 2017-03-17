@@ -201,6 +201,7 @@ defmodule WebSockex.ClientTest do
 
   describe "handle_disconnect callback" do
     test "is invoked when receiving a close frame", context do
+      Process.unlink(context.pid)
       TestClient.catch_attr(:disconnect, context.pid, self())
       send(context.server_pid, :close)
 
