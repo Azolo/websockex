@@ -208,6 +208,7 @@ defmodule WebSockex.ClientTest do
     end
 
     test "is invoked when receiving a close frame with a payload", context do
+      Process.unlink(context.pid)
       TestClient.catch_attr(:disconnect, context.pid, self())
       send(context.server_pid, {:close, 4025, "Testing"})
 
