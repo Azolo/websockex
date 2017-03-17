@@ -293,21 +293,9 @@ defmodule WebSockex.Client do
             raise error
         end
       {:close, new_state} ->
-        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(:close),
-             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
-          terminate({:local, :normal}, parent, debug, %{state | module_state: new_state})
-        else
-          {:error, error} ->
-            raise error
-        end
+        handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
       {:close, {close_code, message}, new_state} ->
-        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame({:close, close_code, message}),
-             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
-          terminate({:local, close_code, message}, parent, debug, %{state | module_state: new_state})
-        else
-          {:error, error} ->
-            raise error
-        end
+        handle_close({:local, close_code, message}, parent, debug, %{state | module_state: new_state})
       badreply ->
         raise %WebSockex.BadResponseError{module: state.module,
           function: function, args: [msg, state.module_state],
@@ -323,6 +311,12 @@ defmodule WebSockex.Client do
   end
   defp handle_close({:remote, _, _} = reason, parent, debug, state) do
     handle_remote_close(reason, parent, debug, state)
+  end
+  defp handle_close({:local, _} = reason, parent, debug, state) do
+    handle_local_close(reason, parent, debug, state)
+  end
+  defp handle_close({:local, _, _} = reason, parent, debug, state) do
+    handle_local_close(reason, parent, debug, state)
   end
 
   defp handle_disconnect(reason, parent, debug, state) do
@@ -360,10 +354,20 @@ defmodule WebSockex.Client do
         raise error
     end
 
-    new_conn = WebSockex.Conn.close_socket(state.conn)
+    new_conn = WebSockex.Conn.wait_for_tcp_close(state.conn)
     state = %{state | conn: new_conn}
 
     handle_disconnect(reason, parent, debug, state)
+  end
+
+  def handle_local_close(reason, parent, debug, state) do
+    with :ok <- send_close_frame(reason, state.conn),
+         new_conn <- WebSockex.Conn.wait_for_tcp_close(state.conn) do
+      handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+    else
+      {:error, error} ->
+        raise error
+    end
   end
 
   defp send_close_frame(reason, conn) do
