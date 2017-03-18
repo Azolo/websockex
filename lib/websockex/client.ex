@@ -23,8 +23,8 @@ defmodule WebSockex.Client do
   ```
   """
 
-  @type message :: {:ping | :ping, nil | binary} | {:text | :binary, binary}
-  @type close_message :: {integer, binary}
+  @type frame :: {:ping | :ping, nil | binary} | {:text | :binary, binary}
+  @type close_frame :: {integer, binary}
 
   @type options :: [option]
 
@@ -35,7 +35,7 @@ defmodule WebSockex.Client do
 
   A `:normal` reason is the same as a `1000` reason.
   """
-  @type close_reason :: {:remote | :local, :normal} | {:remote | :local, :normal | integer, close_message} | {:error, term}
+  @type close_reason :: {:remote | :local, :normal} | {:remote | :local, :normal | integer, close_frame} | {:error, term}
 
   @doc """
   Invoked after connection is established.
@@ -48,27 +48,29 @@ defmodule WebSockex.Client do
   The control frames have possible payloads, when they don't have a payload
   then the frame will have `nil` as the payload. e.g. `{:ping, nil}`
   """
-  @callback handle_msg(message, state :: term) ::
+  @callback handle_frame(frame, state :: term) ::
     {:ok, new_state}
-    | {:reply, message, new_state}
+    | {:reply, frame, new_state}
     | {:close, new_state}
-    | {:close, close_message, new_state} when new_state: term
+    | {:close, close_frame, new_state} when new_state: term
 
   @doc """
   Invoked to handle asynchronous `cast/2` messages.
   """
   @callback handle_cast(msg :: term, state ::term) ::
     {:ok, new_state}
-    | {:reply, message, new_state}
-    | {:close, close_message, new_state} when new_state: term
+    | {:reply, frame, new_state}
+    | {:close, new_state}
+    | {:close, close_frame, new_state} when new_state: term
 
   @doc """
   Invoked to handle all other non-WebSocket messages.
   """
   @callback handle_info(msg :: term, state :: term) ::
     {:ok, new_state}
-    | {:reply, message, new_state}
-    | {:close, close_message, new_state} when new_state: term
+    | {:reply, frame, new_state}
+    | {:close, new_state}
+    | {:close, close_frame, new_state} when new_state: term
 
   @doc """
   Invoked when the WebSocket disconnects from the server.
@@ -82,18 +84,18 @@ defmodule WebSockex.Client do
   """
   @callback handle_ping(:ping | {:ping, binary}, state :: term) ::
     {:ok, new_state}
-    | {:reply, message, new_state}
+    | {:reply, frame, new_state}
     | {:close, new_state}
-    | {:close, close_message, new_state} when new_state: term
+    | {:close, close_frame, new_state} when new_state: term
 
   @doc """
   Invoked when the Websocket receives a pong frame.
   """
   @callback handle_pong(:pong | {:pong, binary}, state :: term) ::
     {:ok, new_state}
-    | {:reply, message, new_state}
+    | {:reply, frame, new_state}
     | {:close, new_state}
-    | {:close, close_message, new_state} when new_state: term
+    | {:close, close_frame, new_state} when new_state: term
 
   @doc """
   Invoked when the process is terminating.
@@ -121,19 +123,19 @@ defmodule WebSockex.Client do
       end
 
       @doc false
-      def handle_msg(message, _state) do
-        raise "No handle_msg/2 clause provided for #{inspect message}"
+      def handle_frame(frame, _state) do
+        raise "No handle_msg/2 clause provided for #{inspect frame}"
       end
 
       @doc false
-      def handle_cast(message, _state) do
-        raise "No handle_cast/2 clause provided for #{inspect message}"
+      def handle_cast(frame, _state) do
+        raise "No handle_cast/2 clause provided for #{inspect frame}"
       end
 
       @doc false
-      def handle_info(message, state) do
+      def handle_info(frame, state) do
         require Logger
-        Logger.error "No handle_info/2 clause provided for #{inspect message}"
+        Logger.error "No handle_info/2 clause provided for #{inspect frame}"
         {:ok, state}
       end
 
@@ -160,7 +162,7 @@ defmodule WebSockex.Client do
       @doc false
       def code_change(_old_vsn, state, _extra), do: {:ok, state}
 
-      defoverridable [init: 1, handle_msg: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
+      defoverridable [init: 1, handle_frame: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
                       handle_pong: 2, handle_disconnect: 2, terminate: 2, code_change: 3]
     end
   end
