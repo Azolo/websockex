@@ -182,8 +182,12 @@ defmodule WebSockex.Client do
     end
   end
 
-  def cast(socket, message) do
-    send(socket, {:"$websockex_cast", message})
+  @doc """
+  Asynchronously sends a message to a client that is handled by `c:handle_cast/2`.
+  """
+  @spec cast(pid, term) :: :ok
+  def cast(client, message) do
+    send(client, {:"$websockex_cast", message})
     :ok
   end
 
