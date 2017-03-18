@@ -94,5 +94,8 @@ defmodule WebSockex.TestSocket do
   def websocket_info({:close, code, reason}, req, state) do
     {:reply, {:close, code, reason}, req, state}
   end
+  def websocket_info({:send, frame}, req, state) do
+    {:reply, frame, req, state}
+  end
   def websocket_info(_, req, state), do: {:ok, req, state}
 end

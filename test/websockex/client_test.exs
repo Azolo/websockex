@@ -49,6 +49,15 @@ defmodule WebSockex.ClientTest do
       super(frame, state)
     end
 
+    def handle_frame({:binary, msg}, %{catch_binary: pid} = state) do
+      send(pid, {:caught_binary, msg})
+      {:ok, state}
+    end
+    def handle_frame({:text, msg}, %{catch_text: pid} = state) do
+      send(pid, {:caught_text, msg})
+      {:ok, state}
+    end
+
     def handle_disconnect({_, :normal} = reason, %{catch_disconnect: pid} = state) do
       send(pid, :caught_disconnect)
       super(reason, state)
@@ -112,6 +121,24 @@ defmodule WebSockex.ClientTest do
 
       assert_receive {:EXIT, _, {:local, 4012, "Test Close"}}
       assert_receive {4012, "Test Close"}
+    end
+  end
+
+  describe "handle_frame" do
+    test "can handle a binary frame", context do
+      TestClient.catch_attr(:binary, context.pid, self())
+      binary = :erlang.term_to_binary(:hello)
+      send(context.server_pid, {:send, {:binary, binary}})
+
+      assert_receive {:caught_binary, ^binary}
+    end
+
+    test "can handle a test frame", context do
+      TestClient.catch_attr(:text, context.pid, self())
+      text = "Murky is green"
+      send(context.server_pid, {:send, {:text, text}})
+
+      assert_receive {:caught_text, ^text}
     end
   end
 
