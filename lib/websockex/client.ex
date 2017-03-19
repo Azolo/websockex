@@ -40,7 +40,7 @@ defmodule WebSockex.Client do
   @doc """
   Invoked after connection is established.
   """
-  @callback init(args :: any) :: {:ok, state :: term}
+  @callback init(args :: any, WebSockex.Conn.t) :: {:ok, state :: term}
 
   @doc """
   Invoked on the reception of a frame on the socket.
@@ -191,20 +191,21 @@ defmodule WebSockex.Client do
     :ok
   end
 
-  def init(parent, uri, module, state, opts) do
+  @doc false
+  def init(parent, uri, module, module_state, opts) do
     # OTP stuffs
     debug = :sys.debug_options([])
 
-    try do
     with {:ok, conn} <- WebSockex.Conn.open_socket(uri, opts),
          key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
          {:ok, request} <- WebSockex.Conn.build_request(conn, key),
          :ok <- WebSockex.Conn.socket_send(conn, request),
          {:ok, headers} <- WebSockex.Conn.handle_response(conn),
          :ok <- validate_handshake(headers, key),
-         :ok <- WebSockex.Conn.set_active(conn) do
+         :ok <- WebSockex.Conn.set_active(conn),
+         {:ok, module_state} <- module_init(module, module_state, conn) do
            :proc_lib.init_ack(parent, {:ok, self()})
-           websocket_loop(parent, debug, %{conn: conn, module: module, module_state: state})
+           websocket_loop(parent, debug, %{conn: conn, module: module, module_state: module_state})
          else
            {:error, reason} ->
              error = Exception.normalize(:error, reason)
@@ -214,7 +215,6 @@ defmodule WebSockex.Client do
     rescue
       exception ->
         exit({exception, System.stacktrace})
-    end
   end
 
   ## OTP Stuffs
@@ -338,6 +338,16 @@ defmodule WebSockex.Client do
         raise %WebSockex.BadResponseError{module: state.module,
           function: :handle_disconnect, args: [reason, state.module_state],
           response: badreply}
+    end
+  end
+
+  defp module_init(module, module_state, conn) do
+    case apply(module, :init, [module_state, conn]) do
+      {:ok, new_state} ->
+        {:ok, new_state}
+      badreply ->
+        raise %WebSockex.BadResponseError{module: module, function: :init,
+          args: [module_state, conn], response: badreply}
     end
   end
 

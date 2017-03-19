@@ -13,6 +13,14 @@ defmodule WebSockex.ClientTest do
       WebSockex.Client.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
+    def init(%{catch_init: pid} = args, _conn) do
+      send(pid, :caught_init)
+      {:ok, args}
+    end
+    def init(args, conn) do
+      {:ok, Map.put(args, :conn, conn)}
+    end
+
     def handle_cast({:pid_reply, pid}, state) do
       send(pid, :cast)
       {:ok, state}
@@ -121,6 +129,14 @@ defmodule WebSockex.ClientTest do
 
       assert_receive {:EXIT, _, {:local, 4012, "Test Close"}}
       assert_receive {4012, "Test Close"}
+    end
+  end
+
+  describe "init callback" do
+    test "get called after successful connection", context do
+      {:ok, _pid} = TestClient.start_link(context.url, %{catch_init: self()})
+
+      assert_receive :caught_init
     end
   end
 
