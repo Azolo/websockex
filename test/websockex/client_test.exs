@@ -252,7 +252,7 @@ defmodule WebSockex.ClientTest do
     test "is invoked when receiving a close frame", context do
       send(context.server_pid, :close)
 
-      assert_receive :caught_disconnect
+      assert_receive :caught_disconnect, 250
     end
 
     test "is invoked when receiving a close frame with a payload", context do
@@ -264,13 +264,13 @@ defmodule WebSockex.ClientTest do
     test "is invoked when sending a close frame", context do
       WebSockex.Client.cast(context.pid, :close)
 
-      assert_receive :caught_disconnect
+      assert_receive :caught_disconnect, 250
     end
 
     test "is invoked when sending a close frame with a payload", context do
       WebSockex.Client.cast(context.pid, {:close, 4025, "Testing"})
 
-      assert_receive {:caught_disconnect, 4025, "Testing"}
+      assert_receive {:caught_disconnect, 4025, "Testing"}, 250
     end
   end
 
