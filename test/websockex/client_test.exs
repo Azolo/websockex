@@ -137,6 +137,65 @@ defmodule WebSockex.ClientTest do
     assert_receive {:caught_text, "Bye"}
   end
 
+  test "errors when receiving two fragment starts", context do
+    Process.unlink(context.pid)
+    WebSockex.Client.cast(context.pid, {:send_conn, self()})
+    assert_receive conn = %WebSockex.Conn{}
+    fragment = <<0::1, 0::3, 1::4, 0::1, 2::7, "He"::utf8>>
+
+    send(context.pid, {conn.transport, conn.socket, fragment})
+    send(context.pid, {conn.transport, conn.socket, fragment})
+
+    assert_receive {1002, "Endpoint tried to start a fragment without finishing another"}
+  end
+
+  test "errors with a continuation and no fragment", context do
+    Process.unlink(context.pid)
+    WebSockex.Client.cast(context.pid, {:send_conn, self()})
+    assert_receive conn = %WebSockex.Conn{}
+    fragment = <<0::1, 0::3, 0::4, 0::1, 4::7, "Blah"::utf8>>
+
+    send(context.pid, {conn.transport, conn.socket, fragment})
+
+    assert_receive {1002, "Endpoint sent a continuation frame without starting a fragment"}
+  end
+
+  test "can receive text fragments", context do
+    WebSockex.Client.cast(context.pid, {:send_conn, self()})
+    TestClient.catch_attr(:text, context.pid, self())
+    assert_receive conn = %WebSockex.Conn{}
+
+    first = <<0::1, 0::3, 1::4, 0::1, 2::7, "He"::utf8>>
+    second = <<0::1, 0::3, 0::4, 0::1, 2::7, "ll"::utf8>>
+    final = <<1::1, 0::3, 0::4, 0::1, 1::7, "o"::utf8>>
+
+    send(context.pid, {conn.transport, conn.socket, first})
+    send(context.pid, {conn.transport, conn.socket, second})
+    send(context.pid, {conn.transport, conn.socket, final})
+
+    assert_receive {:caught_text, "Hello"}
+  end
+
+  test "can receive binary fragments", context do
+    WebSockex.Client.cast(context.pid, {:send_conn, self()})
+    TestClient.catch_attr(:binary, context.pid, self())
+    assert_receive conn = %WebSockex.Conn{}
+    binary = :erlang.term_to_binary(:hello)
+
+    <<first_bin::bytes-size(2), second_bin::bytes-size(2), rest::bytes>> = binary
+    len = byte_size(rest)
+
+    first = <<0::1, 0::3, 2::4, 0::1, 2::7, first_bin::bytes>>
+    second = <<0::1, 0::3, 0::4, 0::1, 2::7, second_bin::bytes>>
+    final = <<1::1, 0::3, 0::4, 0::1, len::7, rest::bytes>>
+
+    send(context.pid, {conn.transport, conn.socket, first})
+    send(context.pid, {conn.transport, conn.socket, second})
+    send(context.pid, {conn.transport, conn.socket, final})
+
+    assert_receive {:caught_binary, ^binary}
+  end
+
   describe "handle_cast callback" do
     test "is called", context do
       WebSockex.Client.cast(context.pid, {:pid_reply, self()})

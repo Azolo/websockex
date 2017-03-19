@@ -208,7 +208,8 @@ defmodule WebSockex.Client do
            websocket_loop(parent, debug, %{conn: conn,
                                            module: module,
                                            module_state: module_state,
-                                           buffer: <<>>})
+                                           buffer: <<>>,
+                                           fragment: nil})
          else
            {:error, reason} ->
              error = Exception.normalize(:error, reason)
@@ -292,6 +293,15 @@ defmodule WebSockex.Client do
   defp handle_frame({:close, code, reason}, parent, debug, state) do
     handle_close({:remote, code, reason}, parent, debug, state)
   end
+  defp handle_frame({:fragment, _, _} = fragment, parent, debug, state) do
+    handle_fragment(fragment, parent, debug, state)
+  end
+  defp handle_frame({:continuation, _} = fragment, parent, debug, state) do
+    handle_fragment(fragment, parent, debug, state)
+  end
+  defp handle_frame({:finish, _} = fragment, parent, debug, state) do
+    handle_fragment(fragment, parent, debug, state)
+  end
   defp handle_frame(frame, parent, debug, state) do
     common_handle({:handle_frame, frame}, parent, debug, state)
   end
@@ -368,6 +378,22 @@ defmodule WebSockex.Client do
       _ ->
         exit(reason)
     end
+  end
+
+  defp handle_fragment({:fragment, type, part}, parent, debug, %{fragment: nil} = state) do
+    websocket_loop(parent, debug, %{state | fragment: {type, part}})
+  end
+  defp handle_fragment({:fragment, _, _}, parent, debug, state) do
+    handle_close({:local, 1002, "Endpoint tried to start a fragment without finishing another"}, parent, debug, state)
+  end
+  defp handle_fragment({:continuation, _}, parent, debug, %{fragment: nil} = state) do
+    handle_close({:local, 1002, "Endpoint sent a continuation frame without starting a fragment"}, parent, debug, state)
+  end
+  defp handle_fragment({:continuation, next}, parent, debug, %{fragment: {type, part}} = state) do
+    websocket_loop(parent, debug, %{state | fragment: {type, <<part::binary, next::binary>>}})
+  end
+  defp handle_fragment({:finish, next}, parent, debug, %{fragment: {type, part}} = state) do
+    handle_frame({type, <<part::binary, next::binary>>}, parent, debug, %{state | fragment: nil})
   end
 
   defp handle_remote_close(reason, parent, debug, state) do
