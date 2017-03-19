@@ -149,7 +149,7 @@ defmodule WebSockex.ClientTest do
       assert_receive {:caught_binary, ^binary}
     end
 
-    test "can handle a test frame", context do
+    test "can handle a text frame", context do
       TestClient.catch_attr(:text, context.pid, self())
       text = "Murky is green"
       send(context.server_pid, {:send, {:text, text}})
