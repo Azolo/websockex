@@ -205,7 +205,10 @@ defmodule WebSockex.Client do
          :ok <- WebSockex.Conn.set_active(conn),
          {:ok, module_state} <- module_init(module, module_state, conn) do
            :proc_lib.init_ack(parent, {:ok, self()})
-           websocket_loop(parent, debug, %{conn: conn, module: module, module_state: module_state})
+           websocket_loop(parent, debug, %{conn: conn,
+                                           module: module,
+                                           module_state: module_state,
+                                           buffer: <<>>})
          else
            {:error, reason} ->
              error = Exception.normalize(:error, reason)
@@ -251,19 +254,23 @@ defmodule WebSockex.Client do
   end
 
   defp websocket_loop(parent, debug, state) do
-    transport = state.conn.transport
-    socket = state.conn.socket
-    receive do
-      {:system, from, req} ->
-        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
-      {:"$websockex_cast", msg} ->
-        common_handle({:handle_cast, msg}, parent, debug, state)
-      {^transport, ^socket, message} ->
-        with {:ok, frame, _} <- WebSockex.Frame.parse_frame(message) do
-          handle_frame(frame, parent, debug, state)
+    case WebSockex.Frame.parse_frame(state.buffer) do
+      {:ok, frame, buffer} ->
+        handle_frame(frame, parent, debug, %{state | buffer: buffer})
+      :incomplete ->
+        transport = state.conn.transport
+        socket = state.conn.socket
+        receive do
+          {:system, from, req} ->
+            :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+          {:"$websockex_cast", msg} ->
+            common_handle({:handle_cast, msg}, parent, debug, state)
+          {^transport, ^socket, message} ->
+            buffer = <<state.buffer::bitstring, message::bitstring>>
+            websocket_loop(parent, debug, %{state | buffer: buffer})
+          msg ->
+            common_handle({:handle_info, msg}, parent, debug, state)
         end
-      msg ->
-        common_handle({:handle_info, msg}, parent, debug, state)
     end
   end
 

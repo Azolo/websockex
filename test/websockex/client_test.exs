@@ -1,6 +1,8 @@
 defmodule WebSockex.ClientTest do
   use ExUnit.Case, async: true
 
+  @basic_server_frame <<1::1, 0::3, 1::4, 0::1, 5::7, "Hello"::utf8>>
+
   defmodule TestClient do
     use WebSockex.Client
 
@@ -35,6 +37,10 @@ defmodule WebSockex.ClientTest do
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
     def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
+    def handle_cast({:send_conn, pid}, %{conn: conn} = state) do
+      send pid, conn
+      {:ok, state}
+    end
 
     def handle_info({:send, frame}, state), do: {:reply, frame, state}
     def handle_info(:close, state), do: {:close, state}
@@ -101,6 +107,34 @@ defmodule WebSockex.ClientTest do
     WebSockex.Client.cast(context.pid, {:set_state, rand_number})
     WebSockex.Client.cast(context.pid, {:get_state, self()})
     assert_receive ^rand_number
+  end
+
+  test "can receive partial frames", context do
+    WebSockex.Client.cast(context.pid, {:send_conn, self()})
+    TestClient.catch_attr(:text, context.pid, self())
+    assert_receive conn = %WebSockex.Conn{}
+
+    <<part::bits-size(14), rest::bits>> = @basic_server_frame
+
+    send(context.pid, {conn.transport, conn.socket, part})
+    send(context.pid, {conn.transport, conn.socket, rest})
+
+    assert_receive {:caught_text, "Hello"}
+  end
+
+  test "can receive multiple frames", context do
+    WebSockex.Client.cast(context.pid, {:send_conn, self()})
+    TestClient.catch_attr(:text, context.pid, self())
+    assert_receive conn = %WebSockex.Conn{}
+    :inet.setopts(conn.socket, active: false)
+
+    send context.server_pid, {:send, {:text, "Hello"}}
+    send context.server_pid, {:send, {:text, "Bye"}}
+
+    :inet.setopts(conn.socket, active: true)
+
+    assert_receive {:caught_text, "Hello"}
+    assert_receive {:caught_text, "Bye"}
   end
 
   describe "handle_cast callback" do
