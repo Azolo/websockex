@@ -360,13 +360,21 @@ defmodule WebSockex.Client do
     case apply(state.module, :handle_disconnect, [reason, state.module_state]) do
       {:ok, new_state} ->
         terminate(reason, parent, debug, %{state | module_state: new_state})
-      {:reconnect, _new_state} ->
-        raise "Not Implemented"
+      {:reconnect, new_state} ->
+        case open_connection(state.conn) do
+          {:ok, conn} ->
+            websocket_loop(parent, debug, %{state | conn: conn, module_state: new_state})
+          {:error, term} ->
+            raise term
+        end
       badreply ->
         raise %WebSockex.BadResponseError{module: state.module,
           function: :handle_disconnect, args: [reason, state.module_state],
           response: badreply}
     end
+  rescue
+    exception ->
+      terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
   defp module_init(module, module_state, conn) do

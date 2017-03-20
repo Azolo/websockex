@@ -41,6 +41,9 @@ defmodule WebSockex.ClientTest do
       send pid, conn
       {:ok, state}
     end
+    def handle_cast(:test_reconnect, state) do
+      {:close, {4985, "Testing Reconnect"}, state}
+    end
 
     def handle_info({:send, frame}, state), do: {:reply, frame, state}
     def handle_info(:close, state), do: {:close, state}
@@ -72,6 +75,9 @@ defmodule WebSockex.ClientTest do
       {:ok, state}
     end
 
+    def handle_disconnect({:local, 4985, _}, state) do
+      {:reconnect, state}
+    end
     def handle_disconnect({_, :normal} = reason, %{catch_disconnect: pid} = state) do
       send(pid, :caught_disconnect)
       super(reason, state)
@@ -364,6 +370,19 @@ defmodule WebSockex.ClientTest do
       WebSockex.Client.cast(context.pid, {:close, 4025, "Testing"})
 
       assert_receive {:caught_disconnect, 4025, "Testing"}, 750
+    end
+
+    test "can reconnect to the endpoint", context do
+      Process.link(context.pid)
+      TestClient.catch_attr(:text, context.pid, self())
+      WebSockex.Client.cast(context.pid, :test_reconnect)
+
+      assert_receive {4985, "Testing Reconnect"}
+
+      server_pid = WebSockex.TestServer.receive_socket_pid
+      send(server_pid, {:send, {:text, "Hello"}})
+
+      assert_receive {:caught_text, "Hello"}, 500
     end
   end
 
