@@ -10,7 +10,7 @@ defmodule WebSockex.ClientTest do
       WebSockex.Client.start_link(url, __MODULE__, state)
     end
 
-    def catch_attr(atom, client, receiver) do
+    def catch_attr(client, atom, receiver) do
       attr = "catch_" <> Atom.to_string(atom)
       WebSockex.Client.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
@@ -117,7 +117,7 @@ defmodule WebSockex.ClientTest do
 
   test "can receive partial frames", context do
     WebSockex.Client.cast(context.pid, {:send_conn, self()})
-    TestClient.catch_attr(:text, context.pid, self())
+    TestClient.catch_attr(context.pid, :text, self())
     assert_receive conn = %WebSockex.Conn{}
 
     <<part::bits-size(14), rest::bits>> = @basic_server_frame
@@ -130,7 +130,7 @@ defmodule WebSockex.ClientTest do
 
   test "can receive multiple frames", context do
     WebSockex.Client.cast(context.pid, {:send_conn, self()})
-    TestClient.catch_attr(:text, context.pid, self())
+    TestClient.catch_attr(context.pid, :text, self())
     assert_receive conn = %WebSockex.Conn{}
     :inet.setopts(conn.socket, active: false)
 
@@ -168,7 +168,7 @@ defmodule WebSockex.ClientTest do
 
   test "can receive text fragments", context do
     WebSockex.Client.cast(context.pid, {:send_conn, self()})
-    TestClient.catch_attr(:text, context.pid, self())
+    TestClient.catch_attr(context.pid, :text, self())
     assert_receive conn = %WebSockex.Conn{}
 
     first = <<0::1, 0::3, 1::4, 0::1, 2::7, "He"::utf8>>
@@ -184,7 +184,7 @@ defmodule WebSockex.ClientTest do
 
   test "can receive binary fragments", context do
     WebSockex.Client.cast(context.pid, {:send_conn, self()})
-    TestClient.catch_attr(:binary, context.pid, self())
+    TestClient.catch_attr(context.pid, :binary, self())
     assert_receive conn = %WebSockex.Conn{}
     binary = :erlang.term_to_binary(:hello)
 
@@ -241,7 +241,7 @@ defmodule WebSockex.ClientTest do
 
   describe "handle_frame" do
     test "can handle a binary frame", context do
-      TestClient.catch_attr(:binary, context.pid, self())
+      TestClient.catch_attr(context.pid, :binary, self())
       binary = :erlang.term_to_binary(:hello)
       send(context.server_pid, {:send, {:binary, binary}})
 
@@ -249,7 +249,7 @@ defmodule WebSockex.ClientTest do
     end
 
     test "can handle a text frame", context do
-      TestClient.catch_attr(:text, context.pid, self())
+      TestClient.catch_attr(context.pid, :text, self())
       text = "Murky is green"
       send(context.server_pid, {:send, {:text, text}})
 
@@ -288,7 +288,7 @@ defmodule WebSockex.ClientTest do
 
   describe "terminate callback" do
     setup context do
-      TestClient.catch_attr(:terminate, context.pid, self())
+      TestClient.catch_attr(context.pid, :terminate, self())
     end
 
     test "executes in a handle_info error", context do
@@ -328,14 +328,14 @@ defmodule WebSockex.ClientTest do
 
   describe "handle_pong callback" do
     test "can handle a pong frame", context do
-      TestClient.catch_attr(:pong, context.pid, self())
+      TestClient.catch_attr(context.pid, :pong, self())
       WebSockex.Client.cast(context.pid, {:send, :ping})
 
       assert_receive :caught_pong
     end
 
     test "can handle a pong frame with a payload", context do
-      TestClient.catch_attr(:pong, context.pid, self())
+      TestClient.catch_attr(context.pid, :pong, self())
       WebSockex.Client.cast(context.pid, {:send, {:ping, "bananas"}})
 
       assert_receive {:caught_payload_pong, "bananas"}
@@ -345,7 +345,7 @@ defmodule WebSockex.ClientTest do
   describe "handle_disconnect callback" do
     setup context do
       Process.unlink(context.pid)
-      TestClient.catch_attr(:disconnect, context.pid, self())
+      TestClient.catch_attr(context.pid, :disconnect, self())
     end
 
     test "is invoked when receiving a close frame", context do
@@ -374,7 +374,7 @@ defmodule WebSockex.ClientTest do
 
     test "can reconnect to the endpoint", context do
       Process.link(context.pid)
-      TestClient.catch_attr(:text, context.pid, self())
+      TestClient.catch_attr(context.pid, :text, self())
       WebSockex.Client.cast(context.pid, :test_reconnect)
 
       assert_receive {4985, "Testing Reconnect"}
