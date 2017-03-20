@@ -37,13 +37,8 @@ defmodule WebSockex.Conn do
   @doc """
   Opens a socket to a uri and returns a conn struct.
   """
-  def open_socket(uri, opts \\ []) do
-    conn = %__MODULE__{host: uri.host,
-                       port: uri.port,
-                       path: uri.path,
-                       query: uri.query,
-                       extra_headers: Keyword.get(opts, :extra_headers, [])}
-
+  @spec open_socket(__MODULE__.t) :: {:ok, __MODULE__.t} | {:error, term}
+  def open_socket(conn) do
     case :gen_tcp.connect(String.to_charlist(conn.host),
                           conn.port,
                           [:binary, active: false, packet: 0],

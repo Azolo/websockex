@@ -7,7 +7,14 @@ defmodule WebSockex.ConnTest do
     on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
 
     uri = URI.parse(url)
-    {:ok, conn} = WebSockex.Conn.open_socket(uri)
+
+    conn = %WebSockex.Conn{host: uri.host,
+                           port: uri.port,
+                           path: uri.path,
+                           query: uri.query,
+                           extra_headers: []}
+
+    {:ok, conn} = WebSockex.Conn.open_socket(conn)
 
     [url: url, uri: uri, conn: conn]
   end
@@ -17,13 +24,13 @@ defmodule WebSockex.ConnTest do
 
     assert {:ok,
       %WebSockex.Conn{host: ^host, port: ^port, path: ^path, socket: _}} =
-        WebSockex.Conn.open_socket(context.uri)
+        WebSockex.Conn.open_socket(context.conn)
   end
 
   test "open_socket with bad path", context do
-    uri = %{context.uri | path: "bad_path"}
+    conn = %{context.conn | path: "bad_path"}
 
-    {:ok, conn} = WebSockex.Conn.open_socket(uri)
+    {:ok, conn} = WebSockex.Conn.open_socket(conn)
     {:ok, request} = WebSockex.Conn.build_request(conn, "pants")
     :ok = WebSockex.Conn.socket_send(conn, request)
 

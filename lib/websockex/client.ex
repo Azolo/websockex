@@ -196,29 +196,29 @@ defmodule WebSockex.Client do
     # OTP stuffs
     debug = :sys.debug_options([])
 
-    with {:ok, conn} <- WebSockex.Conn.open_socket(uri, opts),
-         key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
-         {:ok, request} <- WebSockex.Conn.build_request(conn, key),
-         :ok <- WebSockex.Conn.socket_send(conn, request),
-         {:ok, headers} <- WebSockex.Conn.handle_response(conn),
-         :ok <- validate_handshake(headers, key),
-         :ok <- WebSockex.Conn.set_active(conn),
-         {:ok, module_state} <- module_init(module, module_state, conn) do
+    conn = %WebSockex.Conn{host: uri.host,
+                           port: uri.port,
+                           path: uri.path,
+                           query: uri.query,
+                           extra_headers: Keyword.get(opts, :extra_headers, [])}
+
+    with {:ok, conn} <- open_connection(conn),
+         {:ok, new_module_state} <- module_init(module, module_state, conn) do
            :proc_lib.init_ack(parent, {:ok, self()})
-           websocket_loop(parent, debug, %{conn: conn,
-                                           module: module,
-                                           module_state: module_state,
-                                           buffer: <<>>,
-                                           fragment: nil})
-         else
-           {:error, reason} ->
-             error = Exception.normalize(:error, reason)
-             :proc_lib.init_ack(parent, error)
-             exit(error)
-         end
-    rescue
-      exception ->
-        exit({exception, System.stacktrace})
+            websocket_loop(parent, debug, %{conn: conn,
+                                            module: module,
+                                            module_state: new_module_state,
+                                            buffer: <<>>,
+                                            fragment: nil})
+    else
+      {:error, reason} ->
+        error = Exception.normalize(:error, reason)
+        :proc_lib.init_ack(parent, error)
+        exit(error)
+    end
+  rescue
+    exception ->
+      exit({exception, System.stacktrace})
   end
 
   ## OTP Stuffs
@@ -241,6 +241,17 @@ defmodule WebSockex.Client do
   end
 
   # Internals! Yay
+
+  defp open_connection(conn) do
+    with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
+         key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
+         {:ok, request} <- WebSockex.Conn.build_request(conn, key),
+         :ok <- WebSockex.Conn.socket_send(conn, request),
+         {:ok, headers} <- WebSockex.Conn.handle_response(conn),
+         :ok <- validate_handshake(headers, key),
+         :ok <- WebSockex.Conn.set_active(conn),
+    do: {:ok, conn}
+  end
 
   defp validate_handshake(headers, key) do
     challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
