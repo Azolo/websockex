@@ -8,15 +8,35 @@ defmodule WebSockex.ConnTest do
 
     uri = URI.parse(url)
 
-    conn = %WebSockex.Conn{host: uri.host,
-                           port: uri.port,
-                           path: uri.path,
-                           query: uri.query,
-                           extra_headers: []}
+    conn = WebSockex.Conn.new(uri)
 
     {:ok, conn} = WebSockex.Conn.open_socket(conn)
 
     [url: url, uri: uri, conn: conn]
+  end
+
+  test "new" do
+    regular_uri = URI.parse("ws://localhost/ws")
+    assert WebSockex.Conn.new(regular_uri, extra_headers: [{"Pineapple", "Cake"}]) ==
+      %WebSockex.Conn{host: "localhost",
+                      port: 80,
+                      path: "/ws",
+                      query: nil,
+                      conn_mod: :gen_tcp,
+                      transport: :tcp,
+                      extra_headers: [{"Pineapple", "Cake"}],
+                      socket: nil}
+
+    ssl_uri = URI.parse("wss://localhost/ws")
+    assert WebSockex.Conn.new(ssl_uri, extra_headers: [{"Pineapple", "Cake"}]) ==
+      %WebSockex.Conn{host: "localhost",
+                      port: 443,
+                      path: "/ws",
+                      query: nil,
+                      conn_mod: :ssl,
+                      transport: :ssl,
+                      extra_headers: [{"Pineapple", "Cake"}],
+                      socket: nil}
   end
 
   test "open_socket", context do

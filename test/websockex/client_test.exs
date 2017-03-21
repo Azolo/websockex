@@ -6,8 +6,8 @@ defmodule WebSockex.ClientTest do
   defmodule TestClient do
     use WebSockex.Client
 
-    def start_link(url, state) do
-      WebSockex.Client.start_link(url, __MODULE__, state)
+    def start_link(url, state, opts \\ []) do
+      WebSockex.Client.start_link(url, __MODULE__, state, opts)
     end
 
     def catch_attr(client, atom, receiver) do
@@ -102,6 +102,25 @@ defmodule WebSockex.ClientTest do
     server_pid = WebSockex.TestServer.receive_socket_pid
 
     [pid: pid, url: url, server_pid: server_pid]
+  end
+
+  test "can connect to secure server" do
+    {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+
+    on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+
+    {:ok, pid} = TestClient.start_link(url, %{}, cacerts: WebSockex.TestServer.cacerts)
+    server_pid = WebSockex.TestServer.receive_socket_pid
+
+    TestClient.catch_attr(pid, :pong, self())
+
+    # Test server -> client ping
+    send server_pid, :send_ping
+    assert_receive :received_pong
+
+    # Test client -> server ping
+    WebSockex.Client.cast(pid, {:send, :ping})
+    assert_receive :caught_pong
   end
 
   test "handle changes state", context do

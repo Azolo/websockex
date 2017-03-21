@@ -1,20 +1,21 @@
 defmodule WebSockex.Conn do
-  defstruct conn_mod: :gen_tcp,
+  defstruct conn_mod: nil,
             host: nil,
             port: nil,
             path: nil,
             query: nil,
             extra_headers: [],
-            transport: :tcp,
-            socket: nil
+            transport: nil,
+            socket: nil,
+            cacerts: nil
 
   @type socket :: :gen_tcp.socket
   @type header :: {field :: String.t, value :: String.t}
-  @type transport :: :tcp
+  @type transport :: :tcp | :ssl
 
   @type connection_options :: {:extra_headers, [header]}
 
-  @type t :: %__MODULE__{conn_mod: :gen_tcp,
+  @type t :: %__MODULE__{conn_mod: :gen_tcp | :ssl,
                          host: String.t,
                          port: non_neg_integer,
                          path: String.t | nil,
@@ -22,6 +23,23 @@ defmodule WebSockex.Conn do
                          extra_headers: [header],
                          transport: transport,
                          socket: socket}
+
+  @doc """
+  Returns a new `WebSockex.Conn` struct from a uri and options.
+  """
+  @spec new(URI.t, [connection_options]) :: __MODULE__.t
+  def new(uri, opts \\ []) do
+    mod = conn_module(uri.scheme)
+
+    %WebSockex.Conn{host: uri.host,
+                    port: uri.port,
+                    path: uri.path,
+                    query: uri.query,
+                    conn_mod: mod,
+                    transport: transport(mod),
+                    extra_headers: Keyword.get(opts, :extra_headers, []),
+                    cacerts: Keyword.get(opts, :cacerts, nil)}
+  end
 
   @doc """
   Sends data using the `conn_mod` module.
@@ -38,11 +56,29 @@ defmodule WebSockex.Conn do
   Opens a socket to a uri and returns a conn struct.
   """
   @spec open_socket(__MODULE__.t) :: {:ok, __MODULE__.t} | {:error, term}
-  def open_socket(conn) do
+  def open_socket(conn)
+  def open_socket(%{conn_mod: :gen_tcp} = conn) do
     case :gen_tcp.connect(String.to_charlist(conn.host),
                           conn.port,
                           [:binary, active: false, packet: 0],
                           6000) do
+      {:ok, socket} ->
+        {:ok, Map.put(conn, :socket, socket)}
+      {:error, error} ->
+        {:error, %WebSockex.ConnError{original: error}}
+    end
+  end
+  def open_socket(%{conn_mod: :ssl} = conn) do
+    case :ssl.connect(String.to_charlist(conn.host),
+                      conn.port,
+                      [
+                        :binary,
+                        active: false,
+                        packet: 0,
+                        verify: :verify_peer,
+                        cacerts: conn.cacerts
+                      ],
+                      6000) do
       {:ok, socket} ->
         {:ok, Map.put(conn, :socket, socket)}
       {:error, error} ->
@@ -127,8 +163,15 @@ defmodule WebSockex.Conn do
   def set_active(%{conn_mod: :gen_tcp} = conn) do
     :inet.setopts(conn.socket, active: true)
   end
+  def set_active(%{conn_mod: :ssl} = conn) do
+    :ssl.setopts(conn.socket, active: true)
+  end
 
   defp transport(:gen_tcp), do: :tcp
+  defp transport(:ssl), do: :ssl
+
+  defp conn_module("ws"), do: :gen_tcp
+  defp conn_module("wss"), do: :ssl
 
   defp wait_for_response(conn, buffer \\ "") do
     case Regex.match?(~r/\r\n\r\n/, buffer) do

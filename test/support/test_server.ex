@@ -1,6 +1,10 @@
 defmodule WebSockex.TestServer do
   use Plug.Router
 
+  @certfile Path.join([__DIR__, "priv", "websockex.cer"])
+  @keyfile Path.join([__DIR__, "priv", "websockex.key"])
+  @cacert Path.join([__DIR__, "priv", "websockexca.cer"]) |> File.read! |> :public_key.pem_decode
+
   plug :match
   plug :dispatch
 
@@ -21,6 +25,25 @@ defmodule WebSockex.TestServer do
     end
   end
 
+  def start_https(pid) do
+    ref = make_ref()
+    port = get_port()
+    url = "wss://localhost:#{port}/ws"
+    opts = [dispatch: dispatch(pid),
+            certfile: @certfile,
+            keyfile: @keyfile,
+            port: port,
+            ref: ref]
+
+    case Plug.Adapters.Cowboy.https(__MODULE__, [], opts) do
+      {:ok, _} ->
+        {:ok, {ref, url}}
+      {:error, :eaddrinuse} ->
+        IO.puts "Address #{port} in use!"
+        start(pid)
+    end
+  end
+
   def shutdown(ref) do
     Plug.Adapters.Cowboy.shutdown(ref)
   end
@@ -32,6 +55,11 @@ defmodule WebSockex.TestServer do
     after
       500 -> raise "No Server Socket pid"
     end
+  end
+
+  def cacerts do
+    [{:Certificate, cert, _}] = @cacert
+    [cert]
   end
 
   defp dispatch(pid) do

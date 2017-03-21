@@ -167,6 +167,19 @@ defmodule WebSockex.Client do
     end
   end
 
+  @doc """
+  Starts a `WebSockex.Client` process linked to the current process.
+
+  ### Options
+
+  - `:extra_headers` - defines other headers to be send in the opening request.
+  - `:cacerts` - The CA certifications for use in an secure connection. These
+  certifications need a list of decoded binaries. See the [Erlang `:public_key`
+  module][public_key] for more information.
+
+  [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
+  """
+  @spec start_link(String.t, module, term, options) :: {:ok, pid} | {:error, term}
   def start_link(url, module, state, opts \\ []) do
     case URI.parse(url) do
       # This is confusing to look at. But it's just a match with multiple guards
@@ -196,13 +209,8 @@ defmodule WebSockex.Client do
     # OTP stuffs
     debug = :sys.debug_options([])
 
-    conn = %WebSockex.Conn{host: uri.host,
-                           port: uri.port,
-                           path: uri.path,
-                           query: uri.query,
-                           extra_headers: Keyword.get(opts, :extra_headers, [])}
-
-    with {:ok, conn} <- open_connection(conn),
+    with conn <- WebSockex.Conn.new(uri, opts),
+         {:ok, conn} <- open_connection(conn),
          {:ok, new_module_state} <- module_init(module, module_state, conn) do
            :proc_lib.init_ack(parent, {:ok, self()})
             websocket_loop(parent, debug, %{conn: conn,
