@@ -7,13 +7,18 @@ defmodule WebSockex.Conn do
             extra_headers: [],
             transport: nil,
             socket: nil,
-            cacerts: nil
+            cacerts: nil,
+            insecure: false
 
   @type socket :: :gen_tcp.socket
   @type header :: {field :: String.t, value :: String.t}
   @type transport :: :tcp | :ssl
 
-  @type connection_options :: {:extra_headers, [header]}
+  @type certification :: :public_key.der_encoded
+
+  @type connection_option :: {:extra_headers, [header]} |
+                             {:cacerts, [certification]} |
+                             {:insecure, boolean}
 
   @type t :: %__MODULE__{conn_mod: :gen_tcp | :ssl,
                          host: String.t,
@@ -27,7 +32,7 @@ defmodule WebSockex.Conn do
   @doc """
   Returns a new `WebSockex.Conn` struct from a uri and options.
   """
-  @spec new(URI.t, [connection_options]) :: __MODULE__.t
+  @spec new(URI.t, [connection_option]) :: __MODULE__.t
   def new(uri, opts \\ []) do
     mod = conn_module(uri.scheme)
 
@@ -38,7 +43,8 @@ defmodule WebSockex.Conn do
                     conn_mod: mod,
                     transport: transport(mod),
                     extra_headers: Keyword.get(opts, :extra_headers, []),
-                    cacerts: Keyword.get(opts, :cacerts, nil)}
+                    cacerts: Keyword.get(opts, :cacerts, nil),
+                    insecure: Keyword.get(opts, :insecure, false)}
   end
 
   @doc """
@@ -71,13 +77,7 @@ defmodule WebSockex.Conn do
   def open_socket(%{conn_mod: :ssl} = conn) do
     case :ssl.connect(String.to_charlist(conn.host),
                       conn.port,
-                      [
-                        :binary,
-                        active: false,
-                        packet: 0,
-                        verify: :verify_peer,
-                        cacerts: conn.cacerts
-                      ],
+                      ssl_connection_options(conn),
                       6000) do
       {:ok, socket} ->
         {:ok, Map.put(conn, :socket, socket)}
@@ -226,5 +226,25 @@ defmodule WebSockex.Conn do
           recv_close_loop(conn)
       end
     end
+  end
+
+  # Crazy SSL Stuff (It will be normal SSL stuff when I figure out Erlang's ssl)
+
+  defp ssl_connection_options(%{insecure: true}) do
+    [
+      :binary,
+      active: false,
+      packet: 0,
+      verify: :verify_none
+    ]
+  end
+  defp ssl_connection_options(%{cacerts: cacerts}) when cacerts != nil do
+    [
+      :binary,
+      active: false,
+      packet: 0,
+      verify: :verify_peer,
+      cacerts: cacerts
+    ]
   end
 end

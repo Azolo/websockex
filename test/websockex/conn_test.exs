@@ -58,6 +58,32 @@ defmodule WebSockex.ConnTest do
       {:error, %WebSockex.Conn.RequestError{code: 400, message: "Bad Request"}}
   end
 
+  describe "open_socket can open a secure connection" do
+    setup do
+      {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+
+      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+
+      uri = URI.parse(url)
+
+      [url: url, uri: uri, conn: nil]
+    end
+
+    test "with supplied cacerts", context do
+      conn = WebSockex.Conn.new(context.uri, cacerts: WebSockex.TestServer.cacerts())
+
+      assert {:ok, %WebSockex.Conn{conn_mod: :ssl, transport: :ssl, insecure: false}} =
+        WebSockex.Conn.open_socket(conn)
+    end
+
+    test "with insecure flag", context do
+      conn = WebSockex.Conn.new(context.uri, insecure: true)
+
+      assert {:ok, %WebSockex.Conn{conn_mod: :ssl, transport: :ssl, insecure: true}} =
+        WebSockex.Conn.open_socket(conn)
+    end
+  end
+
   test "close_socket", context do
     socket = context.conn.socket
 
