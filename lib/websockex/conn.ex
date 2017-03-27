@@ -8,7 +8,7 @@ defmodule WebSockex.Conn do
             transport: nil,
             socket: nil,
             cacerts: nil,
-            insecure: false
+            insecure: true
 
   @type socket :: :gen_tcp.socket
   @type header :: {field :: String.t, value :: String.t}
@@ -44,7 +44,7 @@ defmodule WebSockex.Conn do
                     transport: transport(mod),
                     extra_headers: Keyword.get(opts, :extra_headers, []),
                     cacerts: Keyword.get(opts, :cacerts, nil),
-                    insecure: Keyword.get(opts, :insecure, false)}
+                    insecure: Keyword.get(opts, :insecure, true)}
   end
 
   @doc """

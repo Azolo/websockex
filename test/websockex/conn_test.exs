@@ -70,7 +70,8 @@ defmodule WebSockex.ConnTest do
     end
 
     test "with supplied cacerts", context do
-      conn = WebSockex.Conn.new(context.uri, cacerts: WebSockex.TestServer.cacerts())
+      conn = WebSockex.Conn.new(context.uri, [insecure: false,
+                                              cacerts: WebSockex.TestServer.cacerts()])
 
       assert {:ok, %WebSockex.Conn{conn_mod: :ssl, transport: :ssl, insecure: false}} =
         WebSockex.Conn.open_socket(conn)
