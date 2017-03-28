@@ -118,7 +118,7 @@ defmodule WebSockex.Client do
       @behaviour WebSockex.Client
 
       @doc false
-      def init(state) do
+      def init(state, conn) do
         {:ok, state}
       end
 
@@ -162,7 +162,7 @@ defmodule WebSockex.Client do
       @doc false
       def code_change(_old_vsn, state, _extra), do: {:ok, state}
 
-      defoverridable [init: 1, handle_frame: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
+      defoverridable [init: 2, handle_frame: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
                       handle_pong: 2, handle_disconnect: 2, terminate: 2, code_change: 3]
     end
   end
