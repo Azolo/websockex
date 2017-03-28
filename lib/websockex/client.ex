@@ -204,6 +204,15 @@ defmodule WebSockex.Client do
     :ok
   end
 
+  @doc """
+  Queue a frame to be sent asynchronously.
+  """
+  @spec send_frame(pid, frame) :: :ok | {:error, WebSockex.FrameEncodeError.t}
+  def send_frame(pid, frame) do
+    with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
+    do: send(pid, {:"$websockex_send", binary_frame})
+  end
+
   @doc false
   def init(parent, uri, module, module_state, opts) do
     # OTP stuffs
@@ -285,6 +294,8 @@ defmodule WebSockex.Client do
             :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
           {:"$websockex_cast", msg} ->
             common_handle({:handle_cast, msg}, parent, debug, state)
+          {:"$websockex_send", binary_frame} ->
+            handle_send(binary_frame, parent, debug, state)
           {^transport, ^socket, message} ->
             buffer = <<state.buffer::bitstring, message::bitstring>>
             websocket_loop(parent, debug, %{state | buffer: buffer})
@@ -404,6 +415,15 @@ defmodule WebSockex.Client do
         exit(:normal)
       _ ->
         exit(reason)
+    end
+  end
+
+  defp handle_send(binary_frame, parent, debug, %{conn: conn} = state) do
+    case WebSockex.Conn.socket_send(conn, binary_frame) do
+      :ok ->
+        websocket_loop(parent, debug, state)
+      {:error, error} ->
+        terminate(error, parent, debug, state)
     end
   end
 

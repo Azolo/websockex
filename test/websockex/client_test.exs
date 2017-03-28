@@ -221,6 +221,13 @@ defmodule WebSockex.ClientTest do
     assert_receive {:caught_binary, ^binary}
   end
 
+  test "send_frame", context do
+    TestClient.catch_attr(context.pid, :pong, self())
+    WebSockex.Client.send_frame(context.pid, :ping)
+
+    assert_receive :caught_pong
+  end
+
   describe "handle_cast callback" do
     test "is called", context do
       WebSockex.Client.cast(context.pid, {:pid_reply, self()})
