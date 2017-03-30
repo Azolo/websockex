@@ -93,6 +93,10 @@ defmodule WebSockex.ClientTest do
     def terminate(_, _), do: :ok
   end
 
+  defmodule BareClient do
+    use WebSockex.Client
+  end
+
   setup do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
 
@@ -420,5 +424,40 @@ defmodule WebSockex.ClientTest do
     Process.flag(:trap_exit, true)
     send(context.pid, :bad_reply)
     assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
+  end
+
+  describe "default implementation errors" do
+    setup context do
+      {:ok, pid} = WebSockex.Client.start_link(context.url, BareClient, %{})
+      server_pid = WebSockex.TestServer.receive_socket_pid
+
+      [pid: pid, server_pid: server_pid]
+    end
+
+    test "handle_frame", context do
+      Process.flag(:trap_exit, true)
+      frame = {:text, "Hello"}
+      send(context.server_pid, {:send, frame})
+
+      message = "No handle_frame/2 clause in #{__MODULE__}.BareClient provided for #{inspect frame}"
+      assert_receive {:EXIT, _, {%RuntimeError{message: ^message}, _}}
+    end
+
+    test "handle_cast", context do
+      Process.flag(:trap_exit, true)
+      WebSockex.Client.cast(context.pid, :test)
+
+      message = "No handle_cast/2 clause in #{__MODULE__}.BareClient provided for :test"
+      assert_receive {:EXIT, _, {%RuntimeError{message: ^message}, _}}
+    end
+
+    test "handle_info", context do
+      import ExUnit.CaptureLog
+
+      assert capture_log(fn ->
+        send context.pid, :info
+        Process.sleep(50)
+      end) =~ "No handle_info/2 clause in #{__MODULE__}.BareClient provided for :info"
+    end
   end
 end

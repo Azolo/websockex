@@ -15,7 +15,7 @@ defmodule WebSockex.Client do
       WebSockex.Client.start_link(__MODULE__, state)
     end
 
-    def handle_msg({:text, msg}, state) do
+    def handle_frame({:text, msg}, state) do
       IO.puts "Received a message: #{msg}"
       {:ok, state}
     end
@@ -124,18 +124,18 @@ defmodule WebSockex.Client do
 
       @doc false
       def handle_frame(frame, _state) do
-        raise "No handle_msg/2 clause provided for #{inspect frame}"
+        raise "No handle_frame/2 clause in #{__MODULE__} provided for #{inspect frame}"
       end
 
       @doc false
       def handle_cast(frame, _state) do
-        raise "No handle_cast/2 clause provided for #{inspect frame}"
+        raise "No handle_cast/2 clause in #{__MODULE__} provided for #{inspect frame}"
       end
 
       @doc false
       def handle_info(frame, state) do
         require Logger
-        Logger.error "No handle_info/2 clause provided for #{inspect frame}"
+        Logger.error "No handle_info/2 clause in #{__MODULE__} provided for #{inspect frame}"
         {:ok, state}
       end
 
