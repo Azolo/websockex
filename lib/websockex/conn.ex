@@ -130,7 +130,7 @@ defmodule WebSockex.Conn do
               |> Enum.map(&format_header/1)
 
     # Build the request
-    request = ["Get #{build_full_path(conn)} HTTP/1.1" | headers]
+    request = ["GET #{build_full_path(conn)} HTTP/1.1" | headers]
               |> Enum.join("\r\n")
 
     {:ok, request <> "\r\n\r\n"}
