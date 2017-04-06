@@ -2,9 +2,27 @@
 
 An Elixir Websocket Client.
 
-## Installation
+The client itself is provided through the `WebSockex.Client` module.
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
+The simplest implemenation is
+
+```elixir
+defmodule WebSocketExample do
+  use WebSockex.Client
+
+  def start_link(url, state) do
+    WebSockex.Client.start_link(url, __MODULE__, state)
+  end
+
+  def handle_frame({type, msg}, state) do
+    IO.puts "Recieved Message - Type: #{inspect type} -- Message: #{inspect msg}"
+  end
+end
+```
+
+See the `examples/` directory for other examples.
+
+## Installation
 
 1. Add `websockex` to your list of dependencies in `mix.exs`:
 
