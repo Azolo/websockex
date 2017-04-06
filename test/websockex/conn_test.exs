@@ -148,7 +148,7 @@ defmodule WebSockex.ConnTest do
 
     {:ok, request} = WebSockex.Conn.build_request(conn, "pants")
 
-    assert request =~ ~r(Get /coco\?nut=true HTTP\/1.1\r\n)
+    assert request =~ ~r(GET /coco\?nut=true HTTP\/1.1\r\n)
     assert request =~ ~r(Host: #{conn.host}\r\n)
     assert request =~ ~r(Connection: Upgrade\r\n)
     assert request =~ ~r(Sec-WebSocket-Version: 13\r\n)
