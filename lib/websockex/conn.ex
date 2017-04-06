@@ -10,7 +10,7 @@ defmodule WebSockex.Conn do
             cacerts: nil,
             insecure: true
 
-  @type socket :: :gen_tcp.socket
+  @type socket :: :gen_tcp.socket | :ssl.sslsocket
   @type header :: {field :: String.t, value :: String.t}
   @type transport :: :tcp | :ssl
 
@@ -96,7 +96,7 @@ defmodule WebSockex.Conn do
   def close_socket(conn)
   def close_socket(%{socket: nil} = conn), do: conn
   def close_socket(%{socket: socket} = conn) do
-    :inet.close(socket)
+    conn.conn_mod.close(socket)
     %{conn | socket: nil}
   end
 
@@ -109,8 +109,14 @@ defmodule WebSockex.Conn do
   should wait. I don't know how long we should wait but 5 seconds seems good.
   """
   @spec wait_for_tcp_close(__MODULE__.t, integer) :: __MODULE__.t
-  def wait_for_tcp_close(conn, timeout \\ 5000) do
+  def wait_for_tcp_close(conn, timeout \\ 5000)
+  def wait_for_tcp_close(%{conn_mod: :gen_tcp} = conn, timeout) do
     :inet.setopts(conn.socket, active: false)
+    Process.send_after(self(), :"$socket_timeout", timeout)
+    recv_close_loop(conn)
+  end
+  def wait_for_tcp_close(%{conn_mod: :ssl} = conn, timeout) do
+    :ssl.setopts(conn.socket, active: false)
     Process.send_after(self(), :"$socket_timeout", timeout)
     recv_close_loop(conn)
   end
