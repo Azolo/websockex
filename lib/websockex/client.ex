@@ -214,6 +214,7 @@ defmodule WebSockex.Client do
   end
 
   @doc false
+  @spec init(pid, URI.t, module, term, options) :: {:ok, pid} | {:error, term}
   def init(parent, uri, module, module_state, opts) do
     # OTP stuffs
     debug = :sys.debug_options([])
