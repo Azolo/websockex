@@ -461,7 +461,8 @@ defmodule WebSockex.Client do
   end
 
   defp handle_local_close(reason, parent, debug, state) do
-    with :ok <- send_close_frame(reason, state.conn),
+    with :ok <- WebSockex.Conn.set_active(state.conn, false),
+         :ok <- send_close_frame(reason, state.conn),
          new_conn <- WebSockex.Conn.wait_for_tcp_close(state.conn) do
       handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
     else
