@@ -165,12 +165,13 @@ defmodule WebSockex.Conn do
   @doc """
   Sets the socket to active.
   """
-  @spec set_active(__MODULE__.t) :: :ok | {:error, reason :: term}
-  def set_active(%{conn_mod: :gen_tcp} = conn) do
-    :inet.setopts(conn.socket, active: true)
+  @spec set_active(__MODULE__.t, true | false) :: :ok | {:error, reason :: term}
+  def set_active(conn, val \\ true)
+  def set_active(%{conn_mod: :gen_tcp} = conn, val) do
+    :inet.setopts(conn.socket, active: val)
   end
-  def set_active(%{conn_mod: :ssl} = conn) do
-    :ssl.setopts(conn.socket, active: true)
+  def set_active(%{conn_mod: :ssl} = conn, val) do
+    :ssl.setopts(conn.socket, active: val)
   end
 
   defp transport(:gen_tcp), do: :tcp

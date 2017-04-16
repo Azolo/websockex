@@ -111,6 +111,36 @@ defmodule WebSockex.ConnTest do
     assert WebSockex.Conn.close_socket(conn) == conn
   end
 
+  describe "set_active" do
+    test "works on ws connections", context do
+      assert :inet.getopts(context.conn.socket, [:active]) == {:ok, active: false}
+      assert WebSockex.Conn.set_active(context.conn, true) == :ok
+      assert :inet.getopts(context.conn.socket, [:active]) == {:ok, active: true}
+      assert WebSockex.Conn.set_active(context.conn, false) == :ok
+      assert :inet.getopts(context.conn.socket, [:active]) == {:ok, active: false}
+    end
+
+    test "works on wss connections" do
+      {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+      uri = URI.parse(url)
+      conn = WebSockex.Conn.new(uri)
+      {:ok, conn} = WebSockex.Conn.open_socket(conn)
+
+      assert :ssl.getopts(conn.socket, [:active]) == {:ok, active: false}
+      assert WebSockex.Conn.set_active(conn, true) == :ok
+      assert :ssl.getopts(conn.socket, [:active]) == {:ok, active: true}
+      assert WebSockex.Conn.set_active(conn, false) == :ok
+      assert :ssl.getopts(conn.socket, [:active]) == {:ok, active: false}
+    end
+
+    test "sets to true by default", context do
+      assert :inet.getopts(context.conn.socket, [:active]) == {:ok, active: false}
+      assert WebSockex.Conn.set_active(context.conn) == :ok
+      assert :inet.getopts(context.conn.socket, [:active]) == {:ok, active: true}
+    end
+  end
+
   describe "wait_for_tcp_close" do
     test "waits for server to close the connection", %{conn: conn} do
       key = :crypto.strong_rand_bytes(16) |> Base.encode64
