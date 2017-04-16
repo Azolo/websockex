@@ -110,13 +110,8 @@ defmodule WebSockex.Conn do
   """
   @spec wait_for_tcp_close(__MODULE__.t, integer) :: __MODULE__.t
   def wait_for_tcp_close(conn, timeout \\ 5000)
-  def wait_for_tcp_close(%{conn_mod: :gen_tcp} = conn, timeout) do
-    :inet.setopts(conn.socket, active: false)
-    Process.send_after(self(), :"$socket_timeout", timeout)
-    recv_close_loop(conn)
-  end
-  def wait_for_tcp_close(%{conn_mod: :ssl} = conn, timeout) do
-    :ssl.setopts(conn.socket, active: false)
+  def wait_for_tcp_close(conn, timeout) do
+    set_active(conn, false)
     Process.send_after(self(), :"$socket_timeout", timeout)
     recv_close_loop(conn)
   end
