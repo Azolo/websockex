@@ -3,14 +3,17 @@ defmodule WebSockex.Mixfile do
 
   def project do
     [app: :websockex,
+     name: "WebSockex",
      version: "0.1.0",
      elixir: "~> 1.3",
      description: "An Elixir WebSocket client",
+     source_url:  "https://github.com/Azolo/websockex",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      elixirc_paths: elixirc_paths(Mix.env),
      package: package(),
-     deps: deps()]
+     deps: deps(),
+     docs: docs()]
   end
 
   defp elixirc_paths(:test), do: ['lib', 'test/support']
@@ -22,7 +25,7 @@ defmodule WebSockex.Mixfile do
   end
 
   defp deps do
-    [{:ex_doc, "~> 0.14", only: :dev},
+    [{:ex_doc, "~> 0.14", only: :dev, runtime: false},
      {:cowboy, "~> 1.0.0", only: :test},
      {:plug, "~> 1.0", only: :test}]
   end
@@ -32,5 +35,12 @@ defmodule WebSockex.Mixfile do
       maintainers: ["Justin Baker"],
       links: %{"GitHub" => "https://github.com/Azolo/websockex",
                "Docs" => "https://hexdocs.pm/websockex"}}
+  end
+
+  defp docs do
+    [
+      extras: ["README.md"],
+      main: "readme"
+    ]
   end
 end

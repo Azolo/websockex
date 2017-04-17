@@ -20,7 +20,7 @@ defmodule WebSocketExample do
 end
 ```
 
-See the `examples/` directory for other examples.
+See the `examples/` directory for other examples or take a look at the [documentation][docs].
 
 ## Installation
 
@@ -40,3 +40,4 @@ def application do
 end
 ```
 
+[docs]: https://hexdocs.pm/websockex

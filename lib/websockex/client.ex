@@ -23,19 +23,29 @@ defmodule WebSockex.Client do
   ```
   """
 
-  @type frame :: {:ping | :ping, nil | binary} | {:text | :binary, binary}
-  @type close_frame :: {integer, binary}
+  @type frame :: {:ping | :ping, nil | message :: binary}
+                 | {:text | :binary, message :: binary}
+
+  @typedoc """
+  The frame sent when the negotiating a connection closure.
+  """
+  @type close_frame :: {close_code, message :: binary}
+
+  @typedoc """
+  An integer between 1000 and 4999 that specifies the reason for closing the connection.
+  """
+  @type close_code :: integer
 
   @type options :: [option]
 
-  @type option :: {:extra_headers, [WebSockex.Conn.header]}
+  @type option :: WebSockex.Conn.connection_option
 
   @typedoc """
   The reason given and sent to the server when locally closing a connection.
 
   A `:normal` reason is the same as a `1000` reason.
   """
-  @type close_reason :: {:remote | :local, :normal} | {:remote | :local, :normal | integer, close_frame} | {:error, term}
+  @type close_reason :: {:remote | :local, :normal} | {:remote | :local, :normal | close_code, close_frame} | {:error, term}
 
   @doc """
   Invoked after connection is established.
@@ -173,9 +183,13 @@ defmodule WebSockex.Client do
   ### Options
 
   - `:extra_headers` - defines other headers to be send in the opening request.
-  - `:cacerts` - The CA certifications for use in an secure connection. These
-  certifications need a list of decoded binaries. See the [Erlang `:public_key`
-  module][public_key] for more information.
+  - `:insecure` - Determines whether to verify the peer in a SSL connection.
+    SSL peer verification is currenctly broken and only works in certain cases
+    in which the `:cacerts` are also provided. Sorry. _Defaults to `true`_.
+  - `:cacerts` - The CA certifications for use in an secure connection when the
+    `:insecure` option is `false` (has no effect when `:insecure is true`).
+    These certifications need a list of decoded binaries. See the
+    [Erlang `:public_key` module][public_key] for more information.
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """
@@ -241,18 +255,22 @@ defmodule WebSockex.Client do
 
   ## OTP Stuffs
 
+  @doc false
   def system_continue(parent, debug, state) do
     websocket_loop(parent, debug, state)
   end
 
+  @doc false
   def system_terminate(reason, parent, debug, state) do
     terminate(reason, parent, debug, state)
   end
 
+  @doc false
   def system_get_state(state) do
     {:ok, state, state}
   end
 
+  @doc false
   def system_replace_state(fun, state) do
     new_state = fun.(state)
     {:ok, new_state, new_state}

@@ -1,4 +1,12 @@
 defmodule WebSockex.Conn do
+  @moduledoc """
+  Handles establishing and controlling the TCP connection.
+
+  Dispatches to the correct module for the underlying connection. (`:gen_tcp` or `:ssl`)
+
+  Is woefully inadequite for verifying proper peers in SSL connections.
+  """
+
   defstruct conn_mod: nil,
             host: nil,
             port: nil,
