@@ -113,6 +113,9 @@ defmodule WebSockex.TestSocket do
     {:ok, req, state}
   end
 
+  def websocket_info(:stall, _, _) do
+    Process.sleep(:infinity)
+  end
   def websocket_info(:send_ping, req, state), do: {:reply, :ping, req, state}
   def websocket_info(:send_payload_ping, req, state) do
     payload = "Llama and Lambs"

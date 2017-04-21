@@ -512,7 +512,7 @@ defmodule WebSockex.Client do
       {:tcp_closed, ^socket} ->
         new_conn = %{conn | socket: nil}
         handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
-      :"websockex_close_timeout" ->
+      :"$websockex_close_timeout" ->
         new_conn = WebSockex.Conn.close_socket(conn)
         handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
     end

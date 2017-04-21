@@ -467,6 +467,16 @@ defmodule WebSockex.ClientTest do
 
       assert_receive {:caught_text, "Hello"}
     end
+
+    test "local close timeout", context do
+      send(context.server_pid, :stall)
+
+      WebSockex.Client.cast(context.pid, :close)
+
+      send(context.pid, :"$websockex_close_timeout")
+
+      assert_receive :caught_disconnect
+    end
   end
 
   test "Displays an informative error with a bad url" do
