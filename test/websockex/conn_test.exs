@@ -141,39 +141,6 @@ defmodule WebSockex.ConnTest do
     end
   end
 
-  describe "wait_for_tcp_close" do
-    test "waits for server to close the connection", %{conn: conn} do
-      key = :crypto.strong_rand_bytes(16) |> Base.encode64
-      {:ok, request} = WebSockex.Conn.build_request(conn, key)
-      :ok = WebSockex.Conn.socket_send(conn, request)
-
-      server_pid = WebSockex.TestServer.receive_socket_pid()
-      socket = conn.socket
-      Process.send_after(server_pid, :close, 250)
-
-      assert {:ok, _} = :inet.port(socket)
-      assert WebSockex.Conn.wait_for_tcp_close(conn) ==
-        %{conn | socket: nil}
-      assert {:error, _} = :inet.port(socket)
-    end
-
-    test "closes the socket after the timeout", %{conn: conn} do
-      assert {:ok, _} = :inet.port(conn.socket)
-
-      task = Task.async(fn -> WebSockex.Conn.wait_for_tcp_close(conn, 100) end)
-
-      assert Task.await(task, 250) == %{conn | socket: nil}
-      assert {:error, _} = :inet.port(conn.socket)
-    end
-
-    test "works with an already closed socket", %{conn: conn} do
-      :ok = :inet.close(conn.socket)
-
-      assert WebSockex.Conn.wait_for_tcp_close(conn) ==
-        %{conn | socket: nil}
-    end
-  end
-
   test "socket_send returns a send error when fails to send", %{conn: conn} do
     socket = conn.socket
     :ok = conn.conn_mod.close(socket)
