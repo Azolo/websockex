@@ -1,5 +1,4 @@
 version: appveyor-{build}
-max_jobs: 5
 
 environment:
   matrix:
