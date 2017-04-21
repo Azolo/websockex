@@ -37,6 +37,13 @@ defmodule WebSockex.ClientTest do
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
     def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
+    def handle_cast(:delayed_close, state) do
+      receive do
+        {:tcp_closed, socket} ->
+          send(self(), {:tcp_closed, socket})
+          {:close, state}
+      end
+    end
     def handle_cast({:send_conn, pid}, %{conn: conn} = state) do
       send pid, conn
       {:ok, state}
@@ -77,6 +84,14 @@ defmodule WebSockex.ClientTest do
 
     def handle_disconnect({:local, 4985, _}, state) do
       {:reconnect, state}
+    end
+    def handle_disconnect({:remote, :closed}, %{reconnect: true} = state) do
+      send(state.catch_disconnect, {:caught_disconnect, :reconnecting})
+      {:reconnect, state}
+    end
+    def handle_disconnect({:remote, :closed} = reason, %{catch_disconnect: pid} = state) do
+      send(pid, {:caught_disconnect, reason})
+      super(reason, state)
     end
     def handle_disconnect({_, :normal} = reason, %{catch_disconnect: pid} = state) do
       send(pid, :caught_disconnect)
@@ -372,9 +387,10 @@ defmodule WebSockex.ClientTest do
     end
   end
 
-  describe "handle_disconnect callback" do
+  describe "disconnects and handle_disconnect callback" do
     setup context do
       Process.unlink(context.pid)
+      Process.monitor(context.pid)
       TestClient.catch_attr(context.pid, :disconnect, self())
     end
 
@@ -413,6 +429,43 @@ defmodule WebSockex.ClientTest do
       send(server_pid, {:send, {:text, "Hello"}})
 
       assert_receive {:caught_text, "Hello"}, 500
+    end
+
+    @tag :capture_log
+    test "can handle remote closures during client close initiation", context do
+      WebSockex.Client.cast(context.pid, :delayed_close)
+      Process.exit(context.server_pid, :kill)
+
+      assert_receive {:caught_disconnect, {:remote, :closed}}
+    end
+
+    @tag :capture_log
+    test "can handle random remote closures", context do
+      Process.exit(context.server_pid, :kill)
+
+      assert_receive {:caught_disconnect, {:remote, :closed}}
+    end
+
+    @tag :capture_log
+    test "reconnects reset buffer", context do
+      <<part::bits-size(14), _::bits>> = @basic_server_frame
+
+      WebSockex.Client.cast(context.pid, {:send_conn, self()})
+      TestClient.catch_attr(context.pid, :text, self())
+      assert_receive conn = %WebSockex.Conn{}
+
+      WebSockex.Client.cast(context.pid, {:set_attr, :reconnect, true})
+
+      Process.exit(context.server_pid, :kill)
+
+      send(context.pid, {conn.transport, conn.socket, part})
+
+      assert_receive {:caught_disconnect, :reconnecting}
+
+      server_pid = WebSockex.TestServer.receive_socket_pid
+      send(server_pid, {:send, {:text, "Hello"}})
+
+      assert_receive {:caught_text, "Hello"}
     end
   end
 

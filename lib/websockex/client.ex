@@ -318,6 +318,10 @@ defmodule WebSockex.Client do
           {^transport, ^socket, message} ->
             buffer = <<state.buffer::bitstring, message::bitstring>>
             websocket_loop(parent, debug, %{state | buffer: buffer})
+          {:tcp_closed, ^socket} ->
+            handle_close({:remote, :closed}, parent, debug, state)
+          :"websockex_close_timeout" ->
+            websocket_loop(parent, debug, state)
           msg ->
             common_handle({:handle_info, msg}, parent, debug, state)
         end
@@ -381,6 +385,10 @@ defmodule WebSockex.Client do
       terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
+  defp handle_close({:remote, :closed} = reason, parent, debug, state) do
+    new_conn = %{state.conn | socket: nil}
+    handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+  end
   defp handle_close({:remote, _} = reason, parent, debug, state) do
     handle_remote_close(reason, parent, debug, state)
   end
@@ -401,7 +409,9 @@ defmodule WebSockex.Client do
       {:reconnect, new_state} ->
         case open_connection(state.conn) do
           {:ok, conn} ->
-            websocket_loop(parent, debug, %{state | conn: conn, module_state: new_state})
+            websocket_loop(parent, debug, %{state | conn: conn,
+                                                    buffer: <<>>,
+                                                    module_state: new_state})
           {:error, term} ->
             raise term
         end
@@ -465,27 +475,19 @@ defmodule WebSockex.Client do
   defp handle_remote_close(reason, parent, debug, state) do
     # If the socket is already closed then that's ok, but the spec says to send
     # the close frame back in response to receiving it.
-    case send_close_frame(reason, state.conn) do
-      :ok -> :ok
-      {:error, %WebSockex.ConnError{original: :closed}} -> :ok
-      {:error, error} ->
-        raise error
-    end
+    send_close_frame(reason, state.conn)
 
-    new_conn = WebSockex.Conn.wait_for_tcp_close(state.conn)
-    state = %{state | conn: new_conn}
-
-    handle_disconnect(reason, parent, debug, state)
+    Process.send_after(self(), :"$websockex_close_timeout", 5000)
+    close_loop(reason, parent, debug, state)
   end
 
   defp handle_local_close(reason, parent, debug, state) do
-    with :ok <- WebSockex.Conn.set_active(state.conn, false),
-         :ok <- send_close_frame(reason, state.conn),
-         new_conn <- WebSockex.Conn.wait_for_tcp_close(state.conn) do
-      handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
-    else
-      {:error, error} ->
-        raise error
+    case send_close_frame(reason, state.conn) do
+      :ok ->
+        Process.send_after(self(), :"$websockex_close_timeout", 5000)
+        close_loop(reason, parent, debug, state)
+      {:error, %WebSockex.ConnError{original: :closed}} ->
+        close_loop({:remote, :closed}, parent, debug, state)
     end
   end
 
@@ -499,5 +501,20 @@ defmodule WebSockex.Client do
   end
   defp build_close_frame({_, code, msg}) do
     WebSockex.Frame.encode_frame({:close, code, msg})
+  end
+
+  defp close_loop(reason, parent, debug, %{conn: conn} = state) do
+    transport = state.conn.transport
+    socket = state.conn.socket
+    receive do
+      {^transport, ^socket, _} ->
+        close_loop(reason, parent, debug, state)
+      {:tcp_closed, ^socket} ->
+        new_conn = %{conn | socket: nil}
+        handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+      :"websockex_close_timeout" ->
+        new_conn = WebSockex.Conn.close_socket(conn)
+        handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+    end
   end
 end
