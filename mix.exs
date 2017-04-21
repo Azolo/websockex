@@ -33,8 +33,7 @@ defmodule WebSockex.Mixfile do
   defp package do
     %{licenses: ["MIT"],
       maintainers: ["Justin Baker"],
-      links: %{"GitHub" => "https://github.com/Azolo/websockex",
-               "Docs" => "https://hexdocs.pm/websockex"}}
+      links: %{"GitHub" => "https://github.com/Azolo/websockex"}}
   end
 
   defp docs do
