@@ -1,5 +1,7 @@
 version: appveyor-{build}
-elixir_version: 1.4.2
+
+environment:
+ elixir_version: 1.4.2
 
 install:
   - cinst elixir --version %elixir_version%
