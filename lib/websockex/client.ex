@@ -44,8 +44,14 @@ defmodule WebSockex.Client do
   The reason given and sent to the server when locally closing a connection.
 
   A `:normal` reason is the same as a `1000` reason.
+
+  If the peer closes the connection abruptly without a close frame then the
+  close reason is `{:remote, :closed}`.
   """
-  @type close_reason :: {:remote | :local, :normal} | {:remote | :local, :normal | close_code, close_frame} | {:error, term}
+  @type close_reason :: {:remote | :local, :normal}
+                        | {:remote | :local, :normal | close_code, close_frame}
+                        | {:remote, :closed}
+                        | {:error, term}
 
   @doc """
   Invoked after connection is established.
@@ -84,6 +90,12 @@ defmodule WebSockex.Client do
 
   @doc """
   Invoked when the WebSocket disconnects from the server.
+
+  This callback is only called when the `tcp` connection closes. In cases of
+  crashes or other errors then the process will terminate immediately skipping
+  this callback.
+
+  See `t:close_reason` to see more information about what causes disconnects.
   """
   @callback handle_disconnect(close_reason, state :: term) ::
     {:ok, state}
