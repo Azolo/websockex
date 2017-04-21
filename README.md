@@ -1,5 +1,7 @@
 # WebSockex
 
+[![Build Status](https://travis-ci.org/Azolo/websockex.svg?branch=master)](https://travis-ci.org/Azolo/websockex)
+
 An Elixir Websocket Client.
 
 The client itself is provided through the `WebSockex.Client` module.
