@@ -40,7 +40,7 @@ defmodule WebSockex.TestServer do
         {:ok, {ref, url}}
       {:error, :eaddrinuse} ->
         IO.puts "Address #{port} in use!"
-        start(pid)
+        start_https(pid)
     end
   end
 
