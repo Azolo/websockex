@@ -109,22 +109,6 @@ defmodule WebSockex.Conn do
   end
 
   @doc """
-  Waits for the server to close the connection.
-
-  Returns the Connection without the socket.
-
-  The spec says the server should close the TCP connection and the client
-  should wait. I don't know how long we should wait but 5 seconds seems good.
-  """
-  @spec wait_for_tcp_close(__MODULE__.t, integer) :: __MODULE__.t
-  def wait_for_tcp_close(conn, timeout \\ 5000)
-  def wait_for_tcp_close(conn, timeout) do
-    set_active(conn, false)
-    Process.send_after(self(), :"$socket_timeout", timeout)
-    recv_close_loop(conn)
-  end
-
-  @doc """
   Builds the request to be sent along the newly opened socket.
 
   The key parameter is part of the websocket handshake process.
@@ -221,20 +205,6 @@ defmodule WebSockex.Conn do
         decode_headers(rest, [{field, value} | headers])
       {:ok, :http_eoh, body} ->
         {:ok, headers, body}
-    end
-  end
-
-  defp recv_close_loop(conn) do
-    receive do
-      :"$socket_timeout" ->
-        close_socket(conn)
-    after 0 ->
-      case conn.conn_mod.recv(conn.socket, 0, 100) do
-        {:error, :closed} ->
-          %{conn | socket: nil}
-        _ ->
-          recv_close_loop(conn)
-      end
     end
   end
 
