@@ -431,7 +431,6 @@ defmodule WebSockex.ClientTest do
       assert_receive {:caught_text, "Hello"}, 500
     end
 
-    @tag :capture_log
     test "can handle remote closures during client close initiation", context do
       WebSockex.Client.cast(context.pid, :delayed_close)
       Process.exit(context.server_pid, :kill)
@@ -439,14 +438,12 @@ defmodule WebSockex.ClientTest do
       assert_receive {:caught_disconnect, {:remote, :closed}}
     end
 
-    @tag :capture_log
     test "can handle random remote closures", context do
       Process.exit(context.server_pid, :kill)
 
       assert_receive {:caught_disconnect, {:remote, :closed}}
     end
 
-    @tag :capture_log
     test "reconnects reset buffer", context do
       <<part::bits-size(14), _::bits>> = @basic_server_frame
 
