@@ -486,6 +486,11 @@ defmodule WebSockex.ClientTest do
     assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
   end
 
+  test "Won't exit on a request error", context do
+    assert TestClient.start_link(context.url <> "blah", %{}) ==
+      {:error, %WebSockex.Conn.RequestError{code: 404, message: "Not Found"}}
+  end
+
   describe "default implementation errors" do
     setup context do
       {:ok, pid} = WebSockex.Client.start_link(context.url, BareClient, %{})

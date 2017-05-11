@@ -257,8 +257,7 @@ defmodule WebSockex.Client do
     else
       {:error, reason} ->
         error = Exception.normalize(:error, reason)
-        :proc_lib.init_ack(parent, error)
-        exit(error)
+        :proc_lib.init_ack(parent, {:error, error})
     end
   rescue
     exception ->
