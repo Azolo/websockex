@@ -11,8 +11,8 @@ defmodule WebSockex.Client do
   defmodule WsClient do
     use WebSockex.Client
 
-    def start_link(state) do
-      WebSockex.Client.start_link(__MODULE__, state)
+    def start_link(url, state) do
+      WebSockex.Client.start_link(url, __MODULE__, state)
     end
 
     def handle_frame({:text, msg}, state) do
