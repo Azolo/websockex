@@ -95,7 +95,7 @@ defmodule WebSockex.Client do
   crashes or other errors then the process will terminate immediately skipping
   this callback.
 
-  See `t:close_reason` to see more information about what causes disconnects.
+  See `t:close_reason/0` to see more information about what causes disconnects.
   """
   @callback handle_disconnect(close_reason, state :: term) ::
     {:ok, state}
