@@ -6,7 +6,7 @@ defmodule WebSockex.ConnError do
   def message(%__MODULE__{original: error}), do: "Connection Error: #{inspect error}"
 end
 
-defmodule WebSockex.Conn.RequestError do
+defmodule WebSockex.RequestError do
   defexception [:code, :message]
 
   def message(%__MODULE__{code: code, message: message}) do
