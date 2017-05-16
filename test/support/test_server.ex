@@ -15,12 +15,17 @@ defmodule WebSockex.TestServer do
   def start(pid) when is_pid(pid) do
     ref = make_ref()
     port = get_port()
+    {:ok, agent_pid} = Agent.start_link(fn -> :ok end)
     url = "ws://localhost:#{port}/ws"
-    case Plug.Adapters.Cowboy.http(__MODULE__, [], [dispatch: dispatch(pid), port: port, ref: ref]) do
+
+    opts = [dispatch: dispatch({pid, agent_pid}),
+            port: port,
+            ref: ref]
+
+    case Plug.Adapters.Cowboy.http(__MODULE__, [], opts) do
       {:ok, _} ->
         {:ok, {ref, url}}
       {:error, :eaddrinuse} ->
-        IO.puts "Address #{port} in use!"
         start(pid)
     end
   end
@@ -29,7 +34,9 @@ defmodule WebSockex.TestServer do
     ref = make_ref()
     port = get_port()
     url = "wss://localhost:#{port}/ws"
-    opts = [dispatch: dispatch(pid),
+    {:ok, agent_pid} = Agent.start_link(fn -> :ok end)
+
+    opts = [dispatch: dispatch({pid, agent_pid}),
             certfile: @certfile,
             keyfile: @keyfile,
             port: port,
@@ -51,7 +58,6 @@ defmodule WebSockex.TestServer do
   def receive_socket_pid do
     receive do
       pid when is_pid(pid) -> pid
-      _ -> receive_socket_pid()
     after
       500 -> raise "No Server Socket pid"
     end
@@ -62,8 +68,8 @@ defmodule WebSockex.TestServer do
     [cert]
   end
 
-  defp dispatch(pid) do
-    [{:_, [{"/ws", WebSockex.TestSocket, [pid]}]}]
+  defp dispatch(tuple) do
+    [{:_, [{"/ws", WebSockex.TestSocket, [tuple]}]}]
   end
 
   defp get_port do
@@ -80,13 +86,20 @@ end
 defmodule WebSockex.TestSocket do
   @behaviour :cowboy_websocket_handler
 
-  def init(_, _, _) do
-    {:upgrade, :protocol, :cowboy_websocket}
+  def init(_, req, [{_, agent_pid}]) do
+    case Agent.get(agent_pid, fn x -> x end) do
+      :ok -> {:upgrade, :protocol, :cowboy_websocket}
+      int when is_integer(int) ->
+        :cowboy_req.reply(int, req)
+        {:shutdown, req, :tests_are_fun}
+    end
   end
 
-  def websocket_init(_, req, [pid]) do
+  def terminate(_,_,_), do: :ok
+
+  def websocket_init(_, req, [{pid, agent_pid}]) do
     send(pid, self())
-    {:ok, req, %{pid: pid}}
+    {:ok, req, %{pid: pid, agent_pid: agent_pid}}
   end
 
   def websocket_terminate({:remote, :closed}, _, state) do
@@ -127,6 +140,13 @@ defmodule WebSockex.TestSocket do
   end
   def websocket_info({:send, frame}, req, state) do
     {:reply, frame, req, state}
+  end
+  def websocket_info({:set_code, code}, req, state) do
+    Agent.update(state.agent_pid, fn _ -> code end)
+    {:ok, req, state}
+  end
+  def websocket_info(:shutdown, req, state) do
+    {:shutdown, req, state}
   end
   def websocket_info(_, req, state), do: {:ok, req, state}
 end

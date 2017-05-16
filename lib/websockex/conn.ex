@@ -193,7 +193,7 @@ defmodule WebSockex.Conn do
       {:ok, {:http_response, _version, 101, _message}, rest} ->
          decode_headers(rest)
       {:ok, {:http_response, _, code, message}, _} ->
-        {:error, %WebSockex.Conn.RequestError{code: code, message: message}}
+        {:error, %WebSockex.RequestError{code: code, message: message}}
       {:error, error} ->
         {:error, error}
     end

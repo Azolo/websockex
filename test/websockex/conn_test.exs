@@ -55,7 +55,7 @@ defmodule WebSockex.ConnTest do
     :ok = WebSockex.Conn.socket_send(conn, request)
 
     assert WebSockex.Conn.handle_response(conn) ==
-      {:error, %WebSockex.Conn.RequestError{code: 400, message: "Bad Request"}}
+      {:error, %WebSockex.RequestError{code: 400, message: "Bad Request"}}
   end
 
   describe "secure connection" do
