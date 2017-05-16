@@ -51,7 +51,6 @@ defmodule WebSockex.TestServer do
   def receive_socket_pid do
     receive do
       pid when is_pid(pid) -> pid
-      _ -> receive_socket_pid()
     after
       500 -> raise "No Server Socket pid"
     end
