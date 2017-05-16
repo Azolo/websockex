@@ -85,8 +85,11 @@ defmodule WebSockex.ClientTest do
     def handle_disconnect({:local, 4985, _}, state) do
       {:reconnect, state}
     end
-    def handle_disconnect({:remote, :closed}, %{reconnect: true} = state) do
-      send(state.catch_disconnect, {:caught_disconnect, :reconnecting})
+    def handle_disconnect({:remote, :closed}, %{catch_disconnect: pid, reconnect: true} = state) do
+    send(pid, {:caught_disconnect, :reconnecting})
+    {:reconnect, state}
+    end
+    def handle_disconnect(_, %{reconnect: true} = state) do
       {:reconnect, state}
     end
     def handle_disconnect({:remote, :closed} = reason, %{catch_disconnect: pid} = state) do
@@ -142,7 +145,7 @@ defmodule WebSockex.ClientTest do
     {:ok, pid} = TestClient.start_link(url, %{})
     server_pid = WebSockex.TestServer.receive_socket_pid
 
-    [pid: pid, url: url, server_pid: server_pid]
+    [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
   end
 
   test "can connect to secure server" do
@@ -500,7 +503,10 @@ defmodule WebSockex.ClientTest do
 
   describe "handle_connect_failure callback" do
     setup context do
-      {:ok, pid} = TestClient.start_link(context.url, %{catch_connect_failure: self()})
+      WebSockex.Client.cast(context.pid, :close)
+      assert_receive :normal_remote_closed
+
+      {:ok, pid} = TestClient.start_link(context.url, %{reconnect: true})
       server_pid = WebSockex.TestServer.receive_socket_pid
 
       [pid: pid, server_pid: server_pid]
@@ -528,9 +534,57 @@ defmodule WebSockex.ClientTest do
       assert_received {:stopping_retry, %{conn: %WebSockex.Conn{}, error: %{code: 404}, attempt_number: 3}}
     end
 
-    test "can reconnect with a new conn object during an init reconnect", context do
+    test "can reconnect with a new conn struct during an init reconnect", context do
       state_map = %{attempt_reconnect: self(), good_url: context.url, catch_text: self()}
       assert {:ok, _} = TestClient.start_link(context.url <> "bad", state_map)
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      assert_received :retry_change_conn
+
+      send(server_pid, {:send, {:text, "Hello"}})
+
+      assert_receive {:caught_text, "Hello"}
+    end
+
+    test "gets invoked after handle_reconnect", %{pid: client_pid} = context do
+      Process.flag(:trap_exit, true)
+      TestClient.catch_attr(client_pid, :connect_failure, self())
+
+      send(context.server_pid, {:set_code, 404})
+      send(context.server_pid, :shutdown)
+
+      assert_receive :caught_connect_failure, 5000
+      assert_receive {:EXIT, ^client_pid, {%WebSockex.RequestError{code: 404}, _}}
+    end
+
+    test "can attempt to reconnect during after handle_reconnect", %{pid: client_pid} = context do
+      Process.flag(:trap_exit, true)
+
+      WebSockex.Client.cast(context.pid, {:set_attr, :attempt_reconnect, self()})
+
+      send(context.server_pid, {:set_code, 403})
+      send(context.server_pid, :shutdown)
+
+      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 403}, attempt_number: 1}}, 500
+      assert_receive {:check_retry_state, %{attempt: 1}}
+      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 403}, attempt_number: 2}}
+      assert_receive {:check_retry_state, %{attempt: 2, state: %{attempt: 1}}}
+      assert_receive {:stopping_retry, %{conn: %WebSockex.Conn{}, error: %{code: 403}, attempt_number: 3}}
+      assert_receive {:EXIT, ^client_pid, {%WebSockex.RequestError{code: 403}, _}}
+    end
+
+    test "can change conn struct during reconnect after handle_reconnect", context do
+      {:ok, {server_ref, new_url}} = WebSockex.TestServer.start(self())
+      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+      Process.flag(:trap_exit, true)
+
+      WebSockex.Client.cast(context.pid, {:set_attr, :attempt_reconnect, self()})
+      WebSockex.Client.cast(context.pid, {:set_attr, :good_url, new_url})
+      TestClient.catch_attr(context.pid, :text, self())
+
+      send(context.server_pid, {:set_code, 403})
+      send(context.server_pid, :shutdown)
+
       server_pid = WebSockex.TestServer.receive_socket_pid()
 
       assert_received :retry_change_conn

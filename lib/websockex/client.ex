@@ -325,6 +325,31 @@ defmodule WebSockex.Client do
     end
   end
 
+  defp reconnect(parent, debug, state, attempt \\ 1) do
+    case open_connection(state.conn) do
+      {:ok, conn} ->
+        websocket_loop(parent, debug, %{state | conn: conn,
+                                                buffer: <<>>})
+      {:error, %{__struct__: struct} = reason}
+      when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
+        case handle_connect_failure(state.conn,
+                                    state.module,
+                                    state.module_state,
+                                    reason,
+                                    attempt) do
+          {:ok, _} ->
+            raise reason
+          {:reconnect, new_conn, new_module_state} ->
+            new_state = %{state | conn: new_conn,
+                                  module_state: new_module_state}
+            reconnect(parent, debug, new_state, attempt+1)
+        end
+      {:error, reason} ->
+        error = Exception.normalize(:error, reason)
+        raise error
+    end
+  end
+
   defp open_connection(conn) do
     with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
          key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
@@ -454,14 +479,7 @@ defmodule WebSockex.Client do
       {:ok, new_state} ->
         terminate(reason, parent, debug, %{state | module_state: new_state})
       {:reconnect, new_state} ->
-        case open_connection(state.conn) do
-          {:ok, conn} ->
-            websocket_loop(parent, debug, %{state | conn: conn,
-                                                    buffer: <<>>,
-                                                    module_state: new_state})
-          {:error, term} ->
-            raise term
-        end
+        reconnect(parent, debug, %{state | module_state: new_state})
       badreply ->
         raise %WebSockex.BadResponseError{module: state.module,
           function: :handle_disconnect, args: [reason, state.module_state],
