@@ -277,23 +277,9 @@ defmodule WebSockex.Client do
     # OTP stuffs
     debug = :sys.debug_options([])
 
-    with conn <- WebSockex.Conn.new(uri, opts),
-         {:ok, conn} <- open_connection(conn),
-         {:ok, new_module_state} <- module_init(module, module_state, conn) do
-           :proc_lib.init_ack(parent, {:ok, self()})
-            websocket_loop(parent, debug, %{conn: conn,
-                                            module: module,
-                                            module_state: new_module_state,
-                                            buffer: <<>>,
-                                            fragment: nil})
-    else
-      {:error, reason} ->
-        error = Exception.normalize(:error, reason)
-        :proc_lib.init_ack(parent, {:error, error})
-    end
-  rescue
-    exception ->
-      exit({exception, System.stacktrace})
+    conn = WebSockex.Conn.new(uri, opts)
+
+    init_connect(parent, debug, conn, module, module_state, opts)
   end
 
   ## OTP Stuffs
@@ -320,6 +306,24 @@ defmodule WebSockex.Client do
   end
 
   # Internals! Yay
+
+  defp init_connect(parent, debug, conn, module, module_state, opts, attempt \\ 1) do
+    case open_connection(conn) do
+      {:ok, conn} ->
+        module_init(parent, debug, conn, module, module_state, opts)
+      {:error, %{__struct__: struct} = reason}
+      when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
+        case handle_connect_failure(conn, module, module_state, reason, attempt) do
+          {:ok, _} ->
+            :proc_lib.init_ack(parent, {:error, reason})
+          {:reconnect, conn, new_state} ->
+            init_connect(parent, debug, conn, module, new_state, opts, attempt+1)
+        end
+      {:error, reason} ->
+        error = Exception.normalize(:error, reason)
+        :proc_lib.init_ack(parent, {:error, error})
+    end
+  end
 
   defp open_connection(conn) do
     with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
@@ -468,10 +472,15 @@ defmodule WebSockex.Client do
       terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
-  defp module_init(module, module_state, conn) do
+  defp module_init(parent, debug, conn, module, module_state, _opts) do
     case apply(module, :init, [module_state, conn]) do
-      {:ok, new_state} ->
-        {:ok, new_state}
+      {:ok, new_module_state} ->
+         :proc_lib.init_ack(parent, {:ok, self()})
+          websocket_loop(parent, debug, %{conn: conn,
+                                          module: module,
+                                          module_state: new_module_state,
+                                          buffer: <<>>,
+                                          fragment: nil})
       badreply ->
         raise %WebSockex.BadResponseError{module: module, function: :init,
           args: [module_state, conn], response: badreply}
@@ -487,6 +496,24 @@ defmodule WebSockex.Client do
         exit(:normal)
       _ ->
         exit(reason)
+    end
+  end
+
+  defp handle_connect_failure(conn, module, module_state, reason, attempt) do
+    failure_map = %{conn: conn,
+                    error: reason,
+                    attempt_number: attempt}
+
+    case apply(module, :handle_connect_failure, [failure_map, module_state]) do
+      {:ok, new_state} ->
+        {:ok, new_state}
+      {:reconnect, new_state} ->
+        {:reconnect, conn, new_state}
+      {:reconnect, new_conn, new_state} ->
+        {:reconnect, new_conn, new_state}
+      badreply ->
+        raise %WebSockex.BadResponseError{module: module, function: :handle_connect_failure,
+          args: [failure_map, module_state], response: badreply}
     end
   end
 
