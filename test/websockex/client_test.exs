@@ -512,13 +512,13 @@ defmodule WebSockex.ClientTest do
         TestClient.start_link(context.url <> "bad", %{bad_response: true})
     end
 
-    test "get invoked during init connection", context do
+    test "gets invoked during an init connect", context do
       assert {:error, _} = TestClient.start_link(context.url <> "bad", %{catch_connect_failure: self()})
 
       assert_receive :caught_connect_failure
     end
 
-    test "can attempt to reconnect during init connection", context do
+    test "can attempt to reconnect during an init connect", context do
       assert {:error, _} = TestClient.start_link(context.url <> "bad", %{attempt_reconnect: self()})
 
       assert_received {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 404}, attempt_number: 1}}
@@ -528,7 +528,7 @@ defmodule WebSockex.ClientTest do
       assert_received {:stopping_retry, %{conn: %WebSockex.Conn{}, error: %{code: 404}, attempt_number: 3}}
     end
 
-    test "can reconnect with a new conn object on reconnect", context do
+    test "can reconnect with a new conn object during an init reconnect", context do
       state_map = %{attempt_reconnect: self(), good_url: context.url, catch_text: self()}
       assert {:ok, _} = TestClient.start_link(context.url <> "bad", state_map)
       server_pid = WebSockex.TestServer.receive_socket_pid()
