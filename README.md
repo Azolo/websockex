@@ -32,7 +32,7 @@ See the `examples/` directory for other examples or take a look at the [document
 
 ```elixir
 def deps do
-  [{:websockex, "~> 0.1.2"}]
+  [{:websockex, "~> 0.1.3"}]
 end
 ```
 
