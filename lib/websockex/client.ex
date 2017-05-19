@@ -38,6 +38,11 @@ defmodule WebSockex.Client do
 
   @type options :: [option]
 
+  @typedoc """
+  Options values for `start_link`.
+
+  Possible options include: `t:WebSockex.connection_option/0`
+  """
   @type option :: WebSockex.Conn.connection_option
 
   @typedoc """
@@ -224,18 +229,7 @@ defmodule WebSockex.Client do
   @doc """
   Starts a `WebSockex.Client` process linked to the current process.
 
-  ### Options
-
-  - `:extra_headers` - defines other headers to be send in the opening request.
-  - `:insecure` - Determines whether to verify the peer in a SSL connection.
-    SSL peer verification is currenctly broken and only works in certain cases
-    in which the `:cacerts` are also provided. Sorry. _Defaults to `true`_.
-  - `:cacerts` - The CA certifications for use in an secure connection when the
-    `:insecure` option is `false` (has no effect when `:insecure is true`).
-    These certifications need a list of decoded binaries. See the
-    [Erlang `:public_key` module][public_key] for more information.
-
-  [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
+  For available option values see `t:option/0`.
   """
   @spec start_link(String.t, module, term, options) :: {:ok, pid} | {:error, term}
   def start_link(url, module, state, opts \\ []) do

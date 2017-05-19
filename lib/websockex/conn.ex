@@ -24,6 +24,20 @@ defmodule WebSockex.Conn do
 
   @type certification :: :public_key.der_encoded
 
+  @typedoc """
+  Options used when establishing a tcp or ssl connection.
+
+  - `:extra_headers` - defines other headers to be send in the opening request.
+  - `:insecure` - Determines whether to verify the peer in a SSL connection.
+    SSL peer verification is currenctly broken and only works in certain cases
+    in which the `:cacerts` are also provided. Sorry. _Defaults to `true`_.
+  - `:cacerts` - The CA certifications for use in an secure connection when the
+    `:insecure` option is `false` (has no effect when `:insecure is true`).
+    These certifications need a list of decoded binaries. See the
+    [Erlang `:public_key` module][public_key] for more information.
+
+  [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
+  """
   @type connection_option :: {:extra_headers, [header]} |
                              {:cacerts, [certification]} |
                              {:insecure, boolean}
