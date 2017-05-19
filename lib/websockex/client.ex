@@ -41,9 +41,14 @@ defmodule WebSockex.Client do
   @typedoc """
   Options values for `start_link`.
 
-  Possible options include: `t:WebSockex.connection_option/0`
+  - `:async` - Replies with `{:ok, pid}` before establishing the connection.
+    This is useful for when attempting to connect indefinitely, this way the
+    process doesn't block trying to establish a connection.
+
+  Other possible option values include: `t:WebSockex.connection_option/0`
   """
   @type option :: WebSockex.Conn.connection_option
+                  | {:async, boolean}
 
   @typedoc """
   The reason given and sent to the server when locally closing a connection.
@@ -272,9 +277,18 @@ defmodule WebSockex.Client do
     debug = :sys.debug_options([])
     conn = WebSockex.Conn.new(uri, opts)
 
+    reply_fun = case Keyword.get(opts, :async, false) do
+                  true ->
+                    :proc_lib.init_ack(parent, {:ok, self()})
+                    &async_init_fun/1
+                  false ->
+                    &:proc_lib.init_ack(parent, &1)
+                end
+
     state = %{conn: conn,
               module: module,
-              module_state: module_state}
+              module_state: module_state,
+              reply_fun: reply_fun}
 
     init_connect(parent, debug, state, opts)
   end
@@ -312,14 +326,14 @@ defmodule WebSockex.Client do
       when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
         case handle_connect_failure(reason, state, attempt) do
           {:ok, _} ->
-            :proc_lib.init_ack(parent, {:error, reason})
+            state.reply_fun.({:error, reason})
           {:reconnect, new_conn, new_module_state} ->
             state = %{state | conn: new_conn, module_state: new_module_state}
             init_connect(parent, debug, state, opts, attempt+1)
         end
       {:error, reason} ->
         error = Exception.normalize(:error, reason)
-        :proc_lib.init_ack(parent, {:error, error})
+        state.reply_fun.({:error, error})
     end
   end
 
@@ -487,10 +501,11 @@ defmodule WebSockex.Client do
   defp module_init(parent, debug, state, _opts) do
     case apply(state.module, :init, [state.module_state, state.conn]) do
       {:ok, new_module_state} ->
-         :proc_lib.init_ack(parent, {:ok, self()})
+         state.reply_fun.({:ok, self()})
          state = Map.merge(state, %{buffer: <<>>,
                                     fragment: nil,
                                     module_state: new_module_state})
+                 |> Map.delete(:reply_fun)
 
           websocket_loop(parent, debug, state)
       badreply ->
@@ -586,6 +601,9 @@ defmodule WebSockex.Client do
   defp build_close_frame({_, code, msg}) do
     WebSockex.Frame.encode_frame({:close, code, msg})
   end
+
+  defp async_init_fun({:ok, _}), do: :noop
+  defp async_init_fun(exit_reason), do: exit(exit_reason)
 
   defp close_loop(reason, parent, debug, %{conn: conn} = state) do
     transport = state.conn.transport

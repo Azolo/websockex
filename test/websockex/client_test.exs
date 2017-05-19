@@ -148,6 +148,16 @@ defmodule WebSockex.ClientTest do
     [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
   end
 
+  describe "start_link" do
+    test "with async option", context do
+      Process.flag(:trap_exit, true)
+      assert {:ok, pid} =
+        WebSockex.Client.start_link(context.url <> "bad", TestClient, %{}, async: true)
+
+      assert_receive {:EXIT, ^pid, {:error, %WebSockex.RequestError{}}}
+    end
+  end
+
   test "can connect to secure server" do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
 
