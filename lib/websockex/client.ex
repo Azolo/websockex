@@ -270,10 +270,13 @@ defmodule WebSockex.Client do
   def init(parent, uri, module, module_state, opts) do
     # OTP stuffs
     debug = :sys.debug_options([])
-
     conn = WebSockex.Conn.new(uri, opts)
 
-    init_connect(parent, debug, conn, module, module_state, opts)
+    state = %{conn: conn,
+              module: module,
+              module_state: module_state}
+
+    init_connect(parent, debug, state, opts)
   end
 
   ## OTP Stuffs
@@ -301,17 +304,18 @@ defmodule WebSockex.Client do
 
   # Internals! Yay
 
-  defp init_connect(parent, debug, conn, module, module_state, opts, attempt \\ 1) do
-    case open_connection(conn) do
-      {:ok, conn} ->
-        module_init(parent, debug, conn, module, module_state, opts)
+  defp init_connect(parent, debug, state, opts, attempt \\ 1) do
+    case open_connection(state.conn) do
+      {:ok, new_conn} ->
+        module_init(parent, debug, %{state | conn: new_conn}, opts)
       {:error, %{__struct__: struct} = reason}
       when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
-        case handle_connect_failure(conn, module, module_state, reason, attempt) do
+        case handle_connect_failure(reason, state, attempt) do
           {:ok, _} ->
             :proc_lib.init_ack(parent, {:error, reason})
-          {:reconnect, conn, new_state} ->
-            init_connect(parent, debug, conn, module, new_state, opts, attempt+1)
+          {:reconnect, new_conn, new_module_state} ->
+            state = %{state | conn: new_conn, module_state: new_module_state}
+            init_connect(parent, debug, state, opts, attempt+1)
         end
       {:error, reason} ->
         error = Exception.normalize(:error, reason)
@@ -326,11 +330,7 @@ defmodule WebSockex.Client do
                                                 buffer: <<>>})
       {:error, %{__struct__: struct} = reason}
       when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
-        case handle_connect_failure(state.conn,
-                                    state.module,
-                                    state.module_state,
-                                    reason,
-                                    attempt) do
+        case handle_connect_failure(reason, state, attempt) do
           {:ok, _} ->
             raise reason
           {:reconnect, new_conn, new_module_state} ->
@@ -484,18 +484,18 @@ defmodule WebSockex.Client do
       terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
-  defp module_init(parent, debug, conn, module, module_state, _opts) do
-    case apply(module, :init, [module_state, conn]) do
+  defp module_init(parent, debug, state, _opts) do
+    case apply(state.module, :init, [state.module_state, state.conn]) do
       {:ok, new_module_state} ->
          :proc_lib.init_ack(parent, {:ok, self()})
-          websocket_loop(parent, debug, %{conn: conn,
-                                          module: module,
-                                          module_state: new_module_state,
-                                          buffer: <<>>,
-                                          fragment: nil})
+         state = Map.merge(state, %{buffer: <<>>,
+                                    fragment: nil,
+                                    module_state: new_module_state})
+
+          websocket_loop(parent, debug, state)
       badreply ->
-        raise %WebSockex.BadResponseError{module: module, function: :init,
-          args: [module_state, conn], response: badreply}
+        raise %WebSockex.BadResponseError{module: state.module, function: :init,
+          args: [state.module_state, state.conn], response: badreply}
     end
   end
 
@@ -511,21 +511,23 @@ defmodule WebSockex.Client do
     end
   end
 
-  defp handle_connect_failure(conn, module, module_state, reason, attempt) do
-    failure_map = %{conn: conn,
+  defp handle_connect_failure(reason, state, attempt) do
+    failure_map = %{conn: state.conn,
                     error: reason,
                     attempt_number: attempt}
 
-    case apply(module, :handle_connect_failure, [failure_map, module_state]) do
+    case apply(state.module, :handle_connect_failure, [failure_map, state.module_state]) do
       {:ok, new_state} ->
         {:ok, new_state}
       {:reconnect, new_state} ->
-        {:reconnect, conn, new_state}
+        {:reconnect, state.conn, new_state}
       {:reconnect, new_conn, new_state} ->
         {:reconnect, new_conn, new_state}
       badreply ->
-        raise %WebSockex.BadResponseError{module: module, function: :handle_connect_failure,
-          args: [failure_map, module_state], response: badreply}
+        raise %WebSockex.BadResponseError{module: state.module,
+                                          function: :handle_connect_failure,
+                                          args: [failure_map, state.module_state],
+                                          response: badreply}
     end
   end
 
