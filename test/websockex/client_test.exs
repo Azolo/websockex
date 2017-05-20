@@ -150,9 +150,19 @@ defmodule WebSockex.ClientTest do
 
   describe "start_link" do
     test "with async option", context do
+      assert {:ok, _} =
+        TestClient.start_link(context.url, %{catch_text: self()}, async: true)
+
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      send server_pid, {:send, {:text, "Hello"}}
+      assert_receive {:caught_text, "Hello"}
+    end
+
+    test "with async option failure", context do
       Process.flag(:trap_exit, true)
       assert {:ok, pid} =
-        WebSockex.Client.start_link(context.url <> "bad", TestClient, %{}, async: true)
+        TestClient.start_link(context.url <> "bad", %{}, async: true)
 
       assert_receive {:EXIT, ^pid, {:error, %WebSockex.RequestError{}}}
     end
