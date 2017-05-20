@@ -238,14 +238,8 @@ defmodule WebSockex.Client do
   """
   @spec start_link(String.t, module, term, options) :: {:ok, pid} | {:error, term}
   def start_link(url, module, state, opts \\ []) do
-    case URI.parse(url) do
-      # This is confusing to look at. But it's just a match with multiple guards
-      %URI{host: host, port: port, scheme: protocol}
-      when is_nil(host)
-      when is_nil(port)
-      when not protocol in ["ws", "wss"] ->
-        {:error, %WebSockex.URLError{url: url}}
-      %URI{} = uri ->
+    case parse_uri(url) do
+      {:ok, uri} ->
         :proc_lib.start_link(__MODULE__, :init, [self(), uri, module, state, opts])
       {:error, error} ->
         {:error, error}
@@ -617,6 +611,21 @@ defmodule WebSockex.Client do
       :"$websockex_close_timeout" ->
         new_conn = WebSockex.Conn.close_socket(conn)
         handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+    end
+  end
+
+  defp parse_uri(url) do
+    case URI.parse(url) do
+      # This is confusing to look at. But it's just a match with multiple guards
+      %URI{host: host, port: port, scheme: protocol}
+      when is_nil(host)
+      when is_nil(port)
+      when not protocol in ["ws", "wss"] ->
+        {:error, %WebSockex.URLError{url: url}}
+      {:error, error} ->
+        {:error, error}
+      %URI{} = uri ->
+        {:ok, uri}
     end
   end
 end
