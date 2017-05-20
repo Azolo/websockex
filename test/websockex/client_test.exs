@@ -6,6 +6,10 @@ defmodule WebSockex.ClientTest do
   defmodule TestClient do
     use WebSockex.Client
 
+    def start(url, state, opts \\ []) do
+      WebSockex.Client.start(url, __MODULE__, state, opts)
+    end
+
     def start_link(url, state, opts \\ []) do
       WebSockex.Client.start_link(url, __MODULE__, state, opts)
     end
@@ -156,6 +160,31 @@ defmodule WebSockex.ClientTest do
     server_pid = WebSockex.TestServer.receive_socket_pid
 
     [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
+  end
+
+  describe "start" do
+    test "with async option failure", context do
+      assert {:ok, pid} =
+        TestClient.start(context.url, %{async_test: true}, async: true)
+
+      Process.monitor(pid)
+
+      send(pid, {:continue_async, self()})
+
+      assert_receive :async_test, 500
+      assert_receive {:DOWN, _, :process, ^pid, "Async Test"}
+    end
+
+    test "without async option", context do
+      Process.flag(:trap_exit, true)
+      assert TestClient.start(context.url, %{async_test: true}) ==
+        {:error, %RuntimeError{message: "Async Timeout"}}
+    end
+
+    test "returns an error with a bad url" do
+      assert TestClient.start_link("lemon_pie", :ok) ==
+        {:error, %WebSockex.URLError{url: "lemon_pie"}}
+    end
   end
 
   describe "start_link" do

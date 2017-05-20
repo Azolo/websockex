@@ -232,6 +232,21 @@ defmodule WebSockex.Client do
   end
 
   @doc """
+  Starts a `WebSockex.Client` process.
+
+  For available option values see `t:option/0`.
+  """
+  @spec start(String.t, module, term, options) :: {:ok, pid} | {:error, term}
+  def start(url, module, state, opts \\ []) do
+    case parse_uri(url) do
+      {:ok, uri} ->
+        :proc_lib.start(__MODULE__, :init, [self(), uri, module, state, opts])
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
   Starts a `WebSockex.Client` process linked to the current process.
 
   For available option values see `t:option/0`.
