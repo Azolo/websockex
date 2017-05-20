@@ -19,6 +19,16 @@ defmodule WebSockex.ClientTest do
       send(pid, :caught_init)
       {:ok, args}
     end
+    def init(%{async_test: true}, _conn) do
+      receive do
+        {:continue_async, pid} ->
+          send(pid, :async_test)
+          exit "Async Test"
+        after
+          50 ->
+            raise "Async Timeout"
+      end
+    end
     def init(args, conn) do
       {:ok, Map.put(args, :conn, conn)}
     end
@@ -159,12 +169,21 @@ defmodule WebSockex.ClientTest do
       assert_receive {:caught_text, "Hello"}
     end
 
+    test "without async option", context do
+      Process.flag(:trap_exit, true)
+      assert TestClient.start_link(context.url, %{async_test: true}) ==
+        {:error, %RuntimeError{message: "Async Timeout"}}
+    end
+
     test "with async option failure", context do
       Process.flag(:trap_exit, true)
       assert {:ok, pid} =
-        TestClient.start_link(context.url <> "bad", %{}, async: true)
+        TestClient.start_link(context.url, %{async_test: true}, async: true)
 
-      assert_receive {:EXIT, ^pid, {:error, %WebSockex.RequestError{}}}
+      send(pid, {:continue_async, self()})
+
+      assert_receive :async_test, 500
+      assert_receive {:EXIT, ^pid, "Async Test"}
     end
 
     test "returns an error with a bad url" do
