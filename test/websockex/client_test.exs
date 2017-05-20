@@ -166,6 +166,11 @@ defmodule WebSockex.ClientTest do
 
       assert_receive {:EXIT, ^pid, {:error, %WebSockex.RequestError{}}}
     end
+
+    test "returns an error with a bad url" do
+      assert TestClient.start_link("lemon_pie", :ok) ==
+        {:error, %WebSockex.URLError{url: "lemon_pie"}}
+    end
   end
 
   test "can connect to secure server" do
@@ -613,10 +618,6 @@ defmodule WebSockex.ClientTest do
 
       assert_receive {:caught_text, "Hello"}
     end
-  end
-
-  test "Displays an informative error with a bad url" do
-    assert TestClient.start_link("lemon_pie", :ok) == {:error, %WebSockex.URLError{url: "lemon_pie"}}
   end
 
   test "Raises a BadResponseError when a non valid callback response is given", context do
