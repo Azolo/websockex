@@ -51,15 +51,15 @@ defmodule WebSockex.Client do
                   | {:async, boolean}
 
   @typedoc """
-  The reason given and sent to the server when locally closing a connection.
+  The reason a connection was closed.
 
-  A `:normal` reason is the same as a `1000` reason.
+  A `:normal` reason is the same as a `1000` reason with no payload.
 
   If the peer closes the connection abruptly without a close frame then the
   close reason is `{:remote, :closed}`.
   """
   @type close_reason :: {:remote | :local, :normal}
-                        | {:remote | :local, :normal | close_code, close_frame}
+                        | {:remote | :local, close_code, message :: binary}
                         | {:remote, :closed}
                         | {:error, term}
 
