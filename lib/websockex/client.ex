@@ -44,11 +44,17 @@ defmodule WebSockex.Client do
   - `:async` - Replies with `{:ok, pid}` before establishing the connection.
     This is useful for when attempting to connect indefinitely, this way the
     process doesn't block trying to establish a connection.
+  - `:retry` - When set to `true` a connection failure during init won't
+    immediately return an error and instead will invoke the
+    `handle_disconnect` callback. This option only matters during process
+    initialization. The `handle_disconnect` callback is always invoked if an
+    established connection is lost.
 
   Other possible option values include: `t:WebSockex.connection_option/0`
   """
   @type option :: WebSockex.Conn.connection_option
                   | {:async, boolean}
+                  | {:retry, boolean}
 
   @typedoc """
   The reason a connection was closed.
@@ -64,14 +70,19 @@ defmodule WebSockex.Client do
                         | {:error, term}
 
   @typedoc """
+  The error returned when a connection fails to be established.
+  """
+  @type connection_error :: %WebSockex.RequestError{} | %WebSockex.ConnError{}
+
+  @typedoc """
   A map that contains information about the failure to connect.
 
   This map contains the error, attempt number, and the `t:WebSockex.Conn.t/0`
   that was used to attempt the connection.
   """
-  @type connect_failure_map :: %{error: %WebSockex.RequestError{} | %WebSockex.ConnError{},
-                                 attempt_number: integer,
-                                 conn: WebSockex.Conn.t}
+  @type connection_status_map :: %{reason: close_reason | connection_error,
+                                   attempt_number: integer,
+                                   conn: WebSockex.Conn.t}
 
   @doc """
   Invoked after connection is established.
@@ -111,15 +122,25 @@ defmodule WebSockex.Client do
   @doc """
   Invoked when the WebSocket disconnects from the server.
 
-  This callback is only called when the `tcp` connection closes. In cases of
-  crashes or other errors then the process will terminate immediately skipping
-  this callback.
+  This callback is only invoked in the even of a connection failure. In cases
+  of crashes or other errors then the process will terminate immediately
+  skipping this callback.
 
-  See `t:close_reason/0` to see more information about what causes disconnects.
+  If the `retry: true` option is provided during process startup, then this
+  callback will be invoked if the process fails to establish an initial
+  connection.
+
+  The possible returns for this callback are:
+
+  - `{:ok, state}` will continue the process termination.
+  - `{:reconnect, state}` will attempt to reconnect instead of terminating.
+  - `{:reconnect, conn, state}` will attempt to reconnect with the connection
+    data in `conn`. `conn` is expected to be a `t:WebSockex.Conn.t/0`.
   """
-  @callback handle_disconnect(close_reason, state :: term) ::
-    {:ok, state}
-    | {:reconnect, state} when state: term
+  @callback handle_disconnect(connection_status_map, state :: term) ::
+    {:ok, new_state}
+    | {:reconnect, new_state}
+    | {:reconnect, new_conn :: WebSockex.Conn.t, new_state} when new_state: term
 
   @doc """
   Invoked when the Websocket receives a ping frame
@@ -140,24 +161,6 @@ defmodule WebSockex.Client do
     | {:close, close_frame, new_state} when new_state: term
 
   @doc """
-  Invoked when there is a failure trying to open the websocket.
-
-  The failure map is the `t:connect_failure_map.t/0` type, and contains the
-  error attempt number and `t:WebSockex.Conn.t/0` used to connect. You can
-  modify the `Conn` struct to change various things about the way you're
-  attmpting to connect.
-
-  - `{:ok, state}` will continue the process termination or error.
-  - `{:reconnect, state}` will attempt to reconnect instead of terminating.
-  - `{:reconnect, conn, state}` will attempt to reconnect with the connection
-    data in `conn`. `conn` is expected to be a `t:WebSockex.Conn.t/0`.
-  """
-  @callback handle_connect_failure(connect_failure_map, state :: term) ::
-    {:ok, new_state}
-    | {:reconnect, new_state}
-    | {:reconnect, WebSockex.Conn.t, new_state} when new_state: term
-
-  @doc """
   Invoked when the process is terminating.
   """
   @callback terminate(close_reason, state :: term) :: any
@@ -170,8 +173,8 @@ defmodule WebSockex.Client do
     {:ok, new_state :: term}
     | {:error, reason :: term}
 
-  @optional_callbacks [handle_disconnect: 2, handle_ping: 2, handle_pong: 2, handle_connect_failure: 2,
-                       terminate: 2, code_change: 3]
+  @optional_callbacks [handle_disconnect: 2, handle_ping: 2, handle_pong: 2, terminate: 2,
+                       code_change: 3]
 
   defmacro __using__(_) do
     quote location: :keep do
@@ -200,7 +203,7 @@ defmodule WebSockex.Client do
       end
 
       @doc false
-      def handle_disconnect(_close_reason, state) do
+      def handle_disconnect(_connection_status_map, state) do
         {:ok, state}
       end
 
@@ -217,17 +220,13 @@ defmodule WebSockex.Client do
       def handle_pong({:pong, _}, state), do: {:ok, state}
 
       @doc false
-      def handle_connect_failure(_failure_map, state), do: {:ok, state}
-
-      @doc false
       def terminate(_close_reason, _state), do: :ok
 
       @doc false
       def code_change(_old_vsn, state, _extra), do: {:ok, state}
 
       defoverridable [init: 2, handle_frame: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
-                      handle_pong: 2, handle_disconnect: 2, handle_connect_failure: 2,
-                      terminate: 2, code_change: 3]
+                      handle_pong: 2, handle_disconnect: 2, terminate: 2, code_change: 3]
     end
   end
 
@@ -301,7 +300,16 @@ defmodule WebSockex.Client do
               module_state: module_state,
               reply_fun: reply_fun}
 
-    init_connect(parent, debug, state, opts)
+    retry? = Keyword.get(opts, :retry, false)
+
+    case open_connection(state.conn) do
+      {:ok, new_conn} ->
+        module_init(parent, debug, %{state | conn: new_conn})
+      {:error, error} when retry? == true ->
+        on_disconnect(error, parent, debug, state, success: &module_init/3, failure: &init_failure/4)
+      {:error, error} ->
+        state.reply_fun.({:error, error})
+    end
   end
 
   ## OTP Stuffs
@@ -329,44 +337,25 @@ defmodule WebSockex.Client do
 
   # Internals! Yay
 
-  defp init_connect(parent, debug, state, opts, attempt \\ 1) do
-    case open_connection(state.conn) do
-      {:ok, new_conn} ->
-        module_init(parent, debug, %{state | conn: new_conn}, opts)
-      {:error, %{__struct__: struct} = reason}
-      when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
-        case handle_connect_failure(reason, state, attempt) do
-          {:ok, _} ->
-            state.reply_fun.({:error, reason})
-          {:reconnect, new_conn, new_module_state} ->
-            state = %{state | conn: new_conn, module_state: new_module_state}
-            init_connect(parent, debug, state, opts, attempt+1)
+  defp on_disconnect(reason, parent, debug, state, callbacks \\ [], attempt \\ 1) do
+    case handle_disconnect(reason, state, attempt) do
+      {:ok, new_module_state} ->
+        callback = Keyword.get(callbacks, :failure, &terminate/4)
+        callback.(reason, parent, debug, %{state | module_state: new_module_state})
+      {:reconnect, new_conn, new_module_state} ->
+        state = %{state | conn: new_conn, module_state: new_module_state}
+        case open_connection(new_conn) do
+          {:ok, success_conn} ->
+            callback = Keyword.get(callbacks, :success, &reconnect/3)
+            callback.(parent, debug, %{state | conn: success_conn})
+          {:error, new_reason} ->
+            on_disconnect(new_reason, parent, debug, state, callbacks, attempt+1)
         end
-      {:error, reason} ->
-        error = Exception.normalize(:error, reason)
-        state.reply_fun.({:error, error})
     end
   end
 
-  defp reconnect(parent, debug, state, attempt \\ 1) do
-    case open_connection(state.conn) do
-      {:ok, conn} ->
-        websocket_loop(parent, debug, %{state | conn: conn,
-                                                buffer: <<>>})
-      {:error, %{__struct__: struct} = reason}
-      when struct in [WebSockex.ConnError, WebSockex.RequestError] ->
-        case handle_connect_failure(reason, state, attempt) do
-          {:ok, _} ->
-            raise reason
-          {:reconnect, new_conn, new_module_state} ->
-            new_state = %{state | conn: new_conn,
-                                  module_state: new_module_state}
-            reconnect(parent, debug, new_state, attempt+1)
-        end
-      {:error, reason} ->
-        error = Exception.normalize(:error, reason)
-        raise error
-    end
+  defp reconnect(parent, debug, state) do
+    websocket_loop(parent, debug, %{state | buffer: <<>>})
   end
 
   defp open_connection(conn) do
@@ -478,7 +467,7 @@ defmodule WebSockex.Client do
 
   defp handle_close({:remote, :closed} = reason, parent, debug, state) do
     new_conn = %{state.conn | socket: nil}
-    handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+    on_disconnect(reason, parent, debug, %{state | conn: new_conn})
   end
   defp handle_close({:remote, _} = reason, parent, debug, state) do
     handle_remote_close(reason, parent, debug, state)
@@ -493,23 +482,7 @@ defmodule WebSockex.Client do
     handle_local_close(reason, parent, debug, state)
   end
 
-  defp handle_disconnect(reason, parent, debug, state) do
-    case apply(state.module, :handle_disconnect, [reason, state.module_state]) do
-      {:ok, new_state} ->
-        terminate(reason, parent, debug, %{state | module_state: new_state})
-      {:reconnect, new_state} ->
-        reconnect(parent, debug, %{state | module_state: new_state})
-      badreply ->
-        raise %WebSockex.BadResponseError{module: state.module,
-          function: :handle_disconnect, args: [reason, state.module_state],
-          response: badreply}
-    end
-  rescue
-    exception ->
-      terminate({exception, System.stacktrace}, parent, debug, state)
-  end
-
-  defp module_init(parent, debug, state, _opts) do
+  defp module_init(parent, debug, state) do
     case apply(state.module, :init, [state.module_state, state.conn]) do
       {:ok, new_module_state} ->
          state.reply_fun.({:ok, self()})
@@ -534,26 +507,6 @@ defmodule WebSockex.Client do
         exit(:normal)
       _ ->
         exit(reason)
-    end
-  end
-
-  defp handle_connect_failure(reason, state, attempt) do
-    failure_map = %{conn: state.conn,
-                    error: reason,
-                    attempt_number: attempt}
-
-    case apply(state.module, :handle_connect_failure, [failure_map, state.module_state]) do
-      {:ok, new_state} ->
-        {:ok, new_state}
-      {:reconnect, new_state} ->
-        {:reconnect, state.conn, new_state}
-      {:reconnect, new_conn, new_state} ->
-        {:reconnect, new_conn, new_state}
-      badreply ->
-        raise %WebSockex.BadResponseError{module: state.module,
-                                          function: :handle_connect_failure,
-                                          args: [failure_map, state.module_state],
-                                          response: badreply}
     end
   end
 
@@ -601,6 +554,26 @@ defmodule WebSockex.Client do
     end
   end
 
+  defp handle_disconnect(reason, state, attempt) do
+    status_map = %{conn: state.conn,
+                   reason: reason,
+                   attempt_number: attempt}
+
+    case apply(state.module, :handle_disconnect, [status_map, state.module_state]) do
+      {:ok, new_state} ->
+        {:ok, new_state}
+      {:reconnect, new_state} ->
+        {:reconnect, state.conn, new_state}
+      {:reconnect, new_conn, new_state} ->
+        {:reconnect, new_conn, new_state}
+      badreply ->
+        raise %WebSockex.BadResponseError{module: state.module,
+                                          function: :handle_disconnect,
+                                          args: [status_map, state.module_state],
+                                          response: badreply}
+    end
+  end
+
   defp send_close_frame(reason, conn) do
     with {:ok, binary_frame} <- build_close_frame(reason),
     do: WebSockex.Conn.socket_send(conn, binary_frame)
@@ -611,6 +584,10 @@ defmodule WebSockex.Client do
   end
   defp build_close_frame({_, code, msg}) do
     WebSockex.Frame.encode_frame({:close, code, msg})
+  end
+
+  defp init_failure(reason, _parent, _debug, state) do
+    state.reply_fun.({:error, reason})
   end
 
   defp async_init_fun({:ok, _}), do: :noop
@@ -624,10 +601,10 @@ defmodule WebSockex.Client do
         close_loop(reason, parent, debug, state)
       {:tcp_closed, ^socket} ->
         new_conn = %{conn | socket: nil}
-        handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+        on_disconnect(reason, parent, debug, %{state | conn: new_conn})
       :"$websockex_close_timeout" ->
         new_conn = WebSockex.Conn.close_socket(conn)
-        handle_disconnect(reason, parent, debug, %{state | conn: new_conn})
+        on_disconnect(reason, parent, debug, %{state | conn: new_conn})
     end
   end
 

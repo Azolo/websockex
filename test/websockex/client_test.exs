@@ -96,51 +96,50 @@ defmodule WebSockex.ClientTest do
       {:ok, state}
     end
 
-    def handle_disconnect({:local, 4985, _}, state) do
+    def handle_disconnect(_, %{catch_init_connect_failure: pid} = state) do
+      send(pid, :caught_init_connect_failure)
+      {:ok, state}
+    end
+    def handle_disconnect(%{attempt_number: 3} = failure_map, %{multiple_reconnect: pid} = state) do
+      send(pid, {:stopping_retry, failure_map})
+      {:ok, state}
+    end
+    def handle_disconnect(%{attempt_number: attempt} = failure_map, %{multiple_reconnect: pid} = state) do
+      send(pid, {:retry_connect, failure_map})
+      send(pid, {:check_retry_state, %{attempt: attempt, state: state}})
+      {:reconnect, Map.put(state, :attempt, attempt)}
+    end
+    def handle_disconnect(_, %{change_conn_reconnect: pid, good_url: url} = state) do
+      uri = URI.parse(url)
+      conn = WebSockex.Conn.new(uri)
+      send(pid, :retry_change_conn)
+      {:reconnect, conn, state}
+    end
+    def handle_disconnect(%{reason: {:local, 4985, _}}, state) do
       {:reconnect, state}
     end
-    def handle_disconnect({:remote, :closed}, %{catch_disconnect: pid, reconnect: true} = state) do
+    def handle_disconnect(%{reason: {:remote, :closed}}, %{catch_disconnect: pid, reconnect: true} = state) do
     send(pid, {:caught_disconnect, :reconnecting})
     {:reconnect, state}
     end
     def handle_disconnect(_, %{reconnect: true} = state) do
       {:reconnect, state}
     end
-    def handle_disconnect({:remote, :closed} = reason, %{catch_disconnect: pid} = state) do
+    def handle_disconnect(%{reason: {:remote, :closed} = reason} = map,
+                          %{catch_disconnect: pid} = state) do
       send(pid, {:caught_disconnect, reason})
-      super(reason, state)
+      super(map, state)
     end
-    def handle_disconnect({_, :normal} = reason, %{catch_disconnect: pid} = state) do
+    def handle_disconnect(%{reason: {_, :normal}} = map,
+                          %{catch_disconnect: pid} = state) do
       send(pid, :caught_disconnect)
-      super(reason, state)
+      super(map, state)
     end
-    def handle_disconnect({_, code, reason}, %{catch_disconnect: pid} = state) do
+    def handle_disconnect(%{reason: {_, code, reason}}, %{catch_disconnect: pid} = state) do
       send(pid, {:caught_disconnect, code, reason})
       {:ok, state}
     end
     def handle_disconnect(_, state), do: {:ok, state}
-
-    def handle_connect_failure(_failure_map, %{bad_response: true}), do: :bad_response
-    def handle_connect_failure(_failure_map, %{catch_connect_failure: pid} = state) do
-      send(pid, :caught_connect_failure)
-      {:ok, state}
-    end
-    def handle_connect_failure(_, %{attempt_reconnect: pid, good_url: url} = state) do
-      uri = URI.parse(url)
-      conn = WebSockex.Conn.new(uri)
-      send(pid, :retry_change_conn)
-      {:reconnect, conn, state}
-    end
-    def handle_connect_failure(%{attempt_number: 3} = failure_map, %{attempt_reconnect: pid} = state) do
-      send(pid, {:stopping_retry, failure_map})
-      {:ok, state}
-    end
-    def handle_connect_failure(%{attempt_number: attempt} = failure_map, %{attempt_reconnect: pid} = state) do
-      send(pid, {:retry_connect, failure_map})
-      send(pid, {:check_retry_state, %{attempt: attempt, state: state}})
-      {:reconnect, Map.put(state, :attempt, attempt)}
-    end
-    def handle_connect_failure(failure_map, state), do: super(failure_map, state)
 
     def terminate({:local, :normal}, %{catch_terminate: pid}), do: send(pid, :normal_close_terminate)
     def terminate(_, %{catch_terminate: pid}), do: send(pid, :terminate)
@@ -529,6 +528,40 @@ defmodule WebSockex.ClientTest do
       assert_receive {:caught_text, "Hello"}, 500
     end
 
+    test "can attempt to reconnect multiple times", %{pid: client_pid} = context do
+      WebSockex.Client.cast(client_pid, {:set_attr, :multiple_reconnect, self()})
+
+      send(context.server_pid, {:set_code, 403})
+      send(context.server_pid, :shutdown)
+
+      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, attempt_number: 1}}
+      assert_receive {:check_retry_state, %{attempt: 1}}
+      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, reason: %{code: 403}, attempt_number: 2}}
+      assert_receive {:check_retry_state, %{attempt: 2, state: %{attempt: 1}}}
+      assert_receive {:stopping_retry, %{conn: %WebSockex.Conn{}, reason: %{code: 403}, attempt_number: 3}}
+      assert_receive {:DOWN, _ref, :process, ^client_pid, %WebSockex.RequestError{code: 403}}
+    end
+
+    test "can provide new conn struct during reconnect", context do
+      {:ok, {server_ref, new_url}} = WebSockex.TestServer.start(self())
+      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+
+      WebSockex.Client.cast(context.pid, {:set_attr, :change_conn_reconnect, self()})
+      WebSockex.Client.cast(context.pid, {:set_attr, :good_url, new_url})
+      TestClient.catch_attr(context.pid, :text, self())
+
+      send(context.server_pid, {:set_code, 403})
+      send(context.server_pid, :shutdown)
+
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      assert_received :retry_change_conn
+
+      send(server_pid, {:send, {:text, "Hello"}})
+
+      assert_receive {:caught_text, "Hello"}
+    end
+
     test "can handle remote closures during client close initiation", context do
       WebSockex.Client.cast(context.pid, :delayed_close)
       Process.exit(context.server_pid, :kill)
@@ -572,44 +605,34 @@ defmodule WebSockex.ClientTest do
 
       assert_receive :caught_disconnect
     end
-  end
 
-  describe "handle_connect_failure callback" do
-    setup context do
-      WebSockex.Client.cast(context.pid, :close)
-      assert_receive :normal_remote_closed
+    test "gets invoked during init with retry", context do
+      assert {:error, _} = TestClient.start_link(context.url <> "bad",
+                                                 %{catch_init_connect_failure: self()},
+                                                 retry: true)
 
-      {:ok, pid} = TestClient.start_link(context.url, %{reconnect: true})
-      server_pid = WebSockex.TestServer.receive_socket_pid
-
-      [pid: pid, server_pid: server_pid]
+      assert_receive :caught_init_connect_failure
     end
 
-    test "Raises a BadResponseError when a non valid callback response is given", context do
-      Process.flag(:trap_exit, true)
-      assert {:error, %WebSockex.BadResponseError{function: :handle_connect_failure}} =
-        TestClient.start_link(context.url <> "bad", %{bad_response: true})
-    end
+    test "doesn't get invoked during init without retry", context do
+      assert {:error, _} = TestClient.start_link(context.url <> "bad", %{catch_init_connect_failure: self()})
 
-    test "gets invoked during an init connect", context do
-      assert {:error, _} = TestClient.start_link(context.url <> "bad", %{catch_connect_failure: self()})
-
-      assert_receive :caught_connect_failure
+      refute_receive :caught_init_connect_failure
     end
 
     test "can attempt to reconnect during an init connect", context do
-      assert {:error, _} = TestClient.start_link(context.url <> "bad", %{attempt_reconnect: self()})
+      assert {:error, _} = TestClient.start_link(context.url <> "bad", %{multiple_reconnect: self()}, retry: true)
 
-      assert_received {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 404}, attempt_number: 1}}
+      assert_received {:retry_connect, %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 1}}
       assert_received {:check_retry_state, %{attempt: 1}}
-      assert_received {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 404}, attempt_number: 2}}
+      assert_received {:retry_connect, %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 2}}
       assert_received {:check_retry_state, %{attempt: 2, state: %{attempt: 1}}}
-      assert_received {:stopping_retry, %{conn: %WebSockex.Conn{}, error: %{code: 404}, attempt_number: 3}}
+      assert_received {:stopping_retry, %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 3}}
     end
 
     test "can reconnect with a new conn struct during an init reconnect", context do
-      state_map = %{attempt_reconnect: self(), good_url: context.url, catch_text: self()}
-      assert {:ok, _} = TestClient.start_link(context.url <> "bad", state_map)
+      state_map = %{change_conn_reconnect: self(), good_url: context.url, catch_text: self()}
+      assert {:ok, _} = TestClient.start_link(context.url <> "bad", state_map, retry: true)
       server_pid = WebSockex.TestServer.receive_socket_pid()
 
       assert_received :retry_change_conn
@@ -619,53 +642,6 @@ defmodule WebSockex.ClientTest do
       assert_receive {:caught_text, "Hello"}
     end
 
-    test "gets invoked after handle_reconnect", %{pid: client_pid} = context do
-      Process.flag(:trap_exit, true)
-      TestClient.catch_attr(client_pid, :connect_failure, self())
-
-      send(context.server_pid, {:set_code, 404})
-      send(context.server_pid, :shutdown)
-
-      assert_receive :caught_connect_failure, 5000
-      assert_receive {:EXIT, ^client_pid, {%WebSockex.RequestError{code: 404}, _}}
-    end
-
-    test "can attempt to reconnect during after handle_reconnect", %{pid: client_pid} = context do
-      Process.flag(:trap_exit, true)
-
-      WebSockex.Client.cast(context.pid, {:set_attr, :attempt_reconnect, self()})
-
-      send(context.server_pid, {:set_code, 403})
-      send(context.server_pid, :shutdown)
-
-      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 403}, attempt_number: 1}}, 500
-      assert_receive {:check_retry_state, %{attempt: 1}}
-      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, error: %{code: 403}, attempt_number: 2}}
-      assert_receive {:check_retry_state, %{attempt: 2, state: %{attempt: 1}}}
-      assert_receive {:stopping_retry, %{conn: %WebSockex.Conn{}, error: %{code: 403}, attempt_number: 3}}
-      assert_receive {:EXIT, ^client_pid, {%WebSockex.RequestError{code: 403}, _}}
-    end
-
-    test "can change conn struct during reconnect after handle_reconnect", context do
-      {:ok, {server_ref, new_url}} = WebSockex.TestServer.start(self())
-      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
-      Process.flag(:trap_exit, true)
-
-      WebSockex.Client.cast(context.pid, {:set_attr, :attempt_reconnect, self()})
-      WebSockex.Client.cast(context.pid, {:set_attr, :good_url, new_url})
-      TestClient.catch_attr(context.pid, :text, self())
-
-      send(context.server_pid, {:set_code, 403})
-      send(context.server_pid, :shutdown)
-
-      server_pid = WebSockex.TestServer.receive_socket_pid()
-
-      assert_received :retry_change_conn
-
-      send(server_pid, {:send, {:text, "Hello"}})
-
-      assert_receive {:caught_text, "Hello"}
-    end
   end
 
   test "Raises a BadResponseError when a non valid callback response is given", context do
