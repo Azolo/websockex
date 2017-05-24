@@ -275,8 +275,10 @@ defmodule WebSockex.Client do
   """
   @spec send_frame(pid, frame) :: :ok | {:error, WebSockex.FrameEncodeError.t}
   def send_frame(pid, frame) do
-    with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
-    do: send(pid, {:"$websockex_send", binary_frame})
+    with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame) do
+      send(pid, {:"$websockex_send", binary_frame})
+      :ok
+    end
   end
 
   @doc false
