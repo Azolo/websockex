@@ -340,7 +340,7 @@ defmodule WebSockex.ClientTest do
 
   test "send_frame", context do
     TestClient.catch_attr(context.pid, :pong, self())
-    WebSockex.Client.send_frame(context.pid, :ping)
+    assert WebSockex.Client.send_frame(context.pid, :ping) == :ok
 
     assert_receive :caught_pong
   end
