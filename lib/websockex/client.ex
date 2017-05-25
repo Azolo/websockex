@@ -76,7 +76,7 @@ defmodule WebSockex.Client do
   @doc """
   Invoked after connection is established.
   """
-  @callback init(args :: any, WebSockex.Conn.t) :: {:ok, state :: term}
+  @callback init(args :: any, conn :: WebSockex.Conn.t) :: {:ok, state :: term}
 
   @doc """
   Invoked on the reception of a frame on the socket.
@@ -124,7 +124,7 @@ defmodule WebSockex.Client do
   @doc """
   Invoked when the Websocket receives a ping frame
   """
-  @callback handle_ping(:ping | {:ping, binary}, state :: term) ::
+  @callback handle_ping(ping_frame :: :ping | {:ping, binary}, state :: term) ::
     {:ok, new_state}
     | {:reply, frame, new_state}
     | {:close, new_state}
@@ -133,7 +133,7 @@ defmodule WebSockex.Client do
   @doc """
   Invoked when the Websocket receives a pong frame.
   """
-  @callback handle_pong(:pong | {:pong, binary}, state :: term) ::
+  @callback handle_pong(pong_frame :: :pong | {:pong, binary}, state :: term) ::
     {:ok, new_state}
     | {:reply, frame, new_state}
     | {:close, new_state}
