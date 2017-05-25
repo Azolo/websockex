@@ -97,7 +97,7 @@ defmodule WebSockex.ClientTest do
     end
 
     def handle_disconnect(_, %{catch_init_connect_failure: pid} = state) do
-      send(pid, :caught_init_connect_failure)
+      send(pid, :caught_initial_conn_failure)
       {:ok, state}
     end
     def handle_disconnect(%{attempt_number: 3} = failure_map, %{multiple_reconnect: pid} = state) do
@@ -611,13 +611,13 @@ defmodule WebSockex.ClientTest do
                                                  %{catch_init_connect_failure: self()},
                                                  handle_initial_conn_failure: true)
 
-      assert_receive :caught_init_connect_failure
+      assert_receive :caught_initial_conn_failure
     end
 
     test "doesn't get invoked during init without retry", context do
       assert {:error, _} = TestClient.start_link(context.url <> "bad", %{catch_init_connect_failure: self()})
 
-      refute_receive :caught_init_connect_failure
+      refute_receive :caught_initial_conn_failure
     end
 
     test "can attempt to reconnect during an init connect", context do
