@@ -7,9 +7,9 @@
   - `handle_disconnect` now has another return option for when wanted to
     reconnect with different URI options or headers:
     `{:reconnect, new_conn, new_state}`
-  - Added the `:retry` option to the options for `start` and `start_link` that
-    will allow `handle_disconnect` to be called if we can establish a
-    connection during those functions.
+  - Added the `:handle_initial_conn_failure` option to the options for `start`
+    and `start_link` that will allow `handle_disconnect` to be called if we can
+    establish a connection during those functions.
   - Removed `handle_connect_failure` entirely.
 
 ## 0.1.3

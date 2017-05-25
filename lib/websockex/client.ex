@@ -44,9 +44,9 @@ defmodule WebSockex.Client do
   - `:async` - Replies with `{:ok, pid}` before establishing the connection.
     This is useful for when attempting to connect indefinitely, this way the
     process doesn't block trying to establish a connection.
-  - `:retry` - When set to `true` a connection failure during init won't
-    immediately return an error and instead will invoke the
-    `handle_disconnect` callback. This option only matters during process
+  - `:handle_initial_conn_failure` - When set to `true` a connection failure
+    during init won't immediately return an error and instead will invoke the
+    `c:handle_disconnect/2` callback. This option only matters during process
     initialization. The `handle_disconnect` callback is always invoked if an
     established connection is lost.
 
@@ -54,7 +54,7 @@ defmodule WebSockex.Client do
   """
   @type option :: WebSockex.Conn.connection_option
                   | {:async, boolean}
-                  | {:retry, boolean}
+                  | {:handle_initial_conn_failure, boolean}
 
   @typedoc """
   The reason a connection was closed.
@@ -126,9 +126,9 @@ defmodule WebSockex.Client do
   of crashes or other errors then the process will terminate immediately
   skipping this callback.
 
-  If the `retry: true` option is provided during process startup, then this
-  callback will be invoked if the process fails to establish an initial
-  connection.
+  If the `handle_initial_conn_failure: true` option is provided during process
+  startup, then this callback will be invoked if the process fails to establish
+  an initial connection.
 
   The possible returns for this callback are:
 
@@ -300,12 +300,12 @@ defmodule WebSockex.Client do
               module_state: module_state,
               reply_fun: reply_fun}
 
-    retry? = Keyword.get(opts, :retry, false)
+    handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
 
     case open_connection(state.conn) do
       {:ok, new_conn} ->
         module_init(parent, debug, %{state | conn: new_conn})
-      {:error, error} when retry? == true ->
+      {:error, error} when handle_conn_failure == true ->
         on_disconnect(error, parent, debug, state, success: &module_init/3, failure: &init_failure/4)
       {:error, error} ->
         state.reply_fun.({:error, error})
