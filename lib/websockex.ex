@@ -104,7 +104,7 @@ defmodule WebSockex do
   @doc """
   Invoked to handle asynchronous `cast/2` messages.
   """
-  @callback handle_cast(msg :: term, state ::term) ::
+  @callback handle_cast(msg :: term, state :: term) ::
     {:ok, new_state}
     | {:reply, frame, new_state}
     | {:close, new_state}
