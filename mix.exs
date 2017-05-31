@@ -21,7 +21,7 @@ defmodule WebSockex.Mixfile do
 
   def application do
     [applications: [:logger, :ssl, :crypto],
-     mod: {WebSockex, []}]
+     mod: {WebSockex.Application, []}]
   end
 
   defp deps do
