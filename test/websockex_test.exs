@@ -25,11 +25,11 @@ defmodule WebSockexTest do
       WebSockex.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
-    def init(%{catch_init: pid} = args, _conn) do
+    def handle_connect(%{catch_init: pid} = args, _conn) do
       send(pid, :caught_init)
       {:ok, args}
     end
-    def init(%{async_test: true}, _conn) do
+    def handle_connect(%{async_test: true}, _conn) do
       receive do
         {:continue_async, pid} ->
           send(pid, :async_test)
@@ -39,8 +39,8 @@ defmodule WebSockexTest do
             raise "Async Timeout"
       end
     end
-    def init(args, conn) do
-      {:ok, Map.put(args, :conn, conn)}
+    def handle_connect(state, conn) do
+      {:ok, Map.put(state, :conn, conn)}
     end
 
     def handle_cast({:pid_reply, pid}, state) do
@@ -379,7 +379,7 @@ defmodule WebSockexTest do
     end
   end
 
-  describe "init callback" do
+  describe "handle_connect callback" do
     test "get called after successful connection", context do
       {:ok, _pid} = TestClient.start_link(context.url, %{catch_init: self()})
 
@@ -612,7 +612,7 @@ defmodule WebSockexTest do
       assert_receive :caught_disconnect
     end
 
-    test "gets invoked during init with handle_initial_conn_failure", context do
+    test "gets invoked during initial connect with handle_initial_conn_failure", context do
       assert {:error, _} = TestClient.start_link(context.url <> "bad",
                                                  %{catch_init_connect_failure: self()},
                                                  handle_initial_conn_failure: true)
@@ -620,13 +620,13 @@ defmodule WebSockexTest do
       assert_receive :caught_initial_conn_failure
     end
 
-    test "doesn't get invoked during init without retry", context do
+    test "doesn't get invoked during initial connect without retry", context do
       assert {:error, _} = TestClient.start_link(context.url <> "bad", %{catch_init_connect_failure: self()})
 
       refute_receive :caught_initial_conn_failure
     end
 
-    test "can attempt to reconnect during an init connect", context do
+    test "can attempt to reconnect during an initial connect", context do
       assert {:error, _} = TestClient.start_link(context.url <> "bad",
                                                  %{multiple_reconnect: self()},
                                                  handle_initial_conn_failure: true)
@@ -638,7 +638,7 @@ defmodule WebSockexTest do
       assert_received {:stopping_retry, %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 3}}
     end
 
-    test "can reconnect with a new conn struct during an init reconnect", context do
+    test "can reconnect with a new conn struct during an initial connection retry", context do
       state_map = %{change_conn_reconnect: self(), good_url: context.url, catch_text: self()}
       assert {:ok, _} = TestClient.start_link(context.url <> "bad", state_map, handle_initial_conn_failure: true)
       server_pid = WebSockex.TestServer.receive_socket_pid()

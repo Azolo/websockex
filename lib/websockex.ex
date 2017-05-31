@@ -45,10 +45,10 @@ defmodule WebSockex do
     This is useful for when attempting to connect indefinitely, this way the
     process doesn't block trying to establish a connection.
   - `:handle_initial_conn_failure` - When set to `true` a connection failure
-    during init won't immediately return an error and instead will invoke the
-    `c:handle_disconnect/2` callback. This option only matters during process
-    initialization. The `handle_disconnect` callback is always invoked if an
-    established connection is lost.
+    while establishing the initial connection won't immediately return an error
+    and instead will invoke the `c:handle_disconnect/2` callback. This option
+    only matters during process initialization. The `handle_disconnect`
+    callback is always invoked if an established connection is lost.
 
   Other possible option values include: `t:WebSockex.connection_option/0`
   """
@@ -85,9 +85,12 @@ defmodule WebSockex do
                                    conn: WebSockex.Conn.t}
 
   @doc """
-  Invoked after connection is established.
+  Invoked after a connection is established.
+
+  This is invoked after both the initial connection and a reconnect.
   """
-  @callback init(args :: any, conn :: WebSockex.Conn.t) :: {:ok, state :: term}
+  @callback handle_connect(state :: term, conn :: WebSockex.Conn.t) ::
+    {:ok, new_state :: term}
 
   @doc """
   Invoked on the reception of a frame on the socket.
@@ -129,6 +132,9 @@ defmodule WebSockex do
   If the `handle_initial_conn_failure: true` option is provided during process
   startup, then this callback will be invoked if the process fails to establish
   an initial connection.
+
+  If a connection is established by reconnecting, the `c:handle_connect/2`
+  callback will be invoked.
 
   The possible returns for this callback are:
 
@@ -181,7 +187,7 @@ defmodule WebSockex do
       @behaviour WebSockex
 
       @doc false
-      def init(state, conn) do
+      def handle_connect(state, _conn) do
         {:ok, state}
       end
 
@@ -225,7 +231,7 @@ defmodule WebSockex do
       @doc false
       def code_change(_old_vsn, state, _extra), do: {:ok, state}
 
-      defoverridable [init: 2, handle_frame: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
+      defoverridable [handle_connect: 2, handle_frame: 2, handle_cast: 2, handle_info: 2, handle_ping: 2,
                       handle_pong: 2, handle_disconnect: 2, terminate: 2, code_change: 3]
     end
   end
@@ -249,6 +255,9 @@ defmodule WebSockex do
   Starts a `WebSockex` process linked to the current process.
 
   For available option values see `t:option/0`.
+
+  The callback `c:handle_connect/2` is invoked after the connection is
+  established.
   """
   @spec start_link(String.t, module, term, options) :: {:ok, pid} | {:error, term}
   def start_link(url, module, state, opts \\ []) do
@@ -483,7 +492,7 @@ defmodule WebSockex do
   end
 
   defp module_init(parent, debug, state) do
-    case apply(state.module, :init, [state.module_state, state.conn]) do
+    case apply(state.module, :handle_connect, [state.module_state, state.conn]) do
       {:ok, new_module_state} ->
          state.reply_fun.({:ok, self()})
          state = Map.merge(state, %{buffer: <<>>,
@@ -493,7 +502,7 @@ defmodule WebSockex do
 
           websocket_loop(parent, debug, state)
       badreply ->
-        raise %WebSockex.BadResponseError{module: state.module, function: :init,
+        raise %WebSockex.BadResponseError{module: state.module, function: :handle_connect,
           args: [state.module_state, state.conn], response: badreply}
     end
   end
