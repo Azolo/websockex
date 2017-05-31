@@ -191,14 +191,14 @@ defmodule WebSockex do
       end
 
       @doc false
-      def handle_cast(frame, _state) do
-        raise "No handle_cast/2 clause in #{__MODULE__} provided for #{inspect frame}"
+      def handle_cast(message, _state) do
+        raise "No handle_cast/2 clause in #{__MODULE__} provided for #{inspect message}"
       end
 
       @doc false
-      def handle_info(frame, state) do
+      def handle_info(message, state) do
         require Logger
-        Logger.error "No handle_info/2 clause in #{__MODULE__} provided for #{inspect frame}"
+        Logger.error "No handle_info/2 clause in #{__MODULE__} provided for #{inspect message}"
         {:ok, state}
       end
 
