@@ -3,8 +3,13 @@
 - Moved all the `WebSockex.Client` module functionality into the base
   `WebSockex` module.
 - Roll `handle_connect_failure` functionality into `handle_disconnect`.
+- Roll `init` functionality into `handle_connect`
 
 ### Detailed Changes
+- Roll `init` functionality into `handle_connect`
+  - `handle_connect` will be invoked upon establishing any connection, i.e.,
+    the intial connection and when reconnecting.
+  - The `init` callback is removed entirely.
 - Moved all the `WebSockex.Client` module functionality into the base
   `WebSockex` module.
   - Changed the `Application` module to `WebSockex.Application`.
