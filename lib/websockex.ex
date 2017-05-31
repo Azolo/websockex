@@ -364,7 +364,16 @@ defmodule WebSockex do
   end
 
   defp reconnect(parent, debug, state) do
-    websocket_loop(parent, debug, %{state | buffer: <<>>})
+    case apply(state.module, :handle_connect, [state.module_state, state.conn]) do
+      {:ok, new_module_state} ->
+         state = Map.merge(state, %{buffer: <<>>,
+                                    fragment: nil,
+                                    module_state: new_module_state})
+          websocket_loop(parent, debug, state)
+      badreply ->
+        raise %WebSockex.BadResponseError{module: state.module, function: :handle_connect,
+          args: [state.module_state, state.conn], response: badreply}
+    end
   end
 
   defp open_connection(conn) do

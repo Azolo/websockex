@@ -25,8 +25,8 @@ defmodule WebSockexTest do
       WebSockex.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
-    def handle_connect(%{catch_init: pid} = args, _conn) do
-      send(pid, :caught_init)
+    def handle_connect(%{catch_connect: pid} = args, _conn) do
+      send(pid, :caught_connect)
       {:ok, args}
     end
     def handle_connect(%{async_test: true}, _conn) do
@@ -380,10 +380,19 @@ defmodule WebSockexTest do
   end
 
   describe "handle_connect callback" do
-    test "get called after successful connection", context do
-      {:ok, _pid} = TestClient.start_link(context.url, %{catch_init: self()})
+    test "gets invoked after successful connection", context do
+      {:ok, _pid} = TestClient.start_link(context.url, %{catch_connect: self()})
 
-      assert_receive :caught_init
+      assert_receive :caught_connect
+    end
+
+    test "gets invoked after reconnection", context do
+      TestClient.catch_attr(context.pid, :connect, self())
+      WebSockex.cast(context.pid, {:set_attr, :reconnect, true})
+
+      send(context.server_pid, :close)
+
+      assert_receive :caught_connect
     end
   end
 
