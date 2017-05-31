@@ -1,5 +1,14 @@
 ## Unreleased
-- Add `Client.start` for non-linked processes.
+### Major Changes
+- Moved all the `WebSockex.Client` module functionality into the base
+  `WebSockex` module.
+- Roll `handle_connect_failure` functionality into `handle_disconnect`.
+
+### Detailed Changes
+- Moved all the `WebSockex.Client` module functionality into the base
+  `WebSockex` module.
+  - Changed the `Application` module to `WebSockex.Application`.
+- Add `WebSockex.start` for non-linked processes.
 - Add `async` option to `start` and `start_link`.
 - Roll `handle_connect_failure` functionality into `handle_disconnect`.
   - The first parameter of `handle_disconnect` is now a map with the keys:
