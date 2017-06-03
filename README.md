@@ -5,16 +5,14 @@
 
 An Elixir Websocket Client.
 
-The client itself is provided through the `WebSockex.Client` module.
-
 The simplest implemenation is
 
 ```elixir
 defmodule WebSocketExample do
-  use WebSockex.Client
+  use WebSockex
 
   def start_link(url, state) do
-    WebSockex.Client.start_link(url, __MODULE__, state)
+    WebSockex.start_link(url, __MODULE__, state)
   end
 
   def handle_frame({type, msg}, state) do
