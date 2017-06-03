@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.0
 ### Major Changes
 - Moved all the `WebSockex.Client` module functionality into the base
   `WebSockex` module.
