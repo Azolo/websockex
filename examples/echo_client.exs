@@ -27,12 +27,12 @@ defmodule EchoClient do
     {:ok, :state}
   end
 
-  def handle_disconnect({:local, reason}, state) do
+  def handle_disconnect(%{reason: {:local, reason}}, state) do
     Logger.info("Local close with reason: #{inspect reason}")
     {:ok, state}
   end
-  def handle_disconnect(reason, state) do
-    super(reason, state)
+  def handle_disconnect(disconnect_map, state) do
+    super(disconnect_map, state)
   end
 end
 
