@@ -1,6 +1,30 @@
-## Unreleased
-- Add `Client.start` for non-linked processes.
+## 0.2.0
+### Major Changes
+- Moved all the `WebSockex.Client` module functionality into the base
+  `WebSockex` module.
+- Roll `handle_connect_failure` functionality into `handle_disconnect`.
+- Roll `init` functionality into `handle_connect`
+
+### Detailed Changes
+- Roll `init` functionality into `handle_connect`
+  - `handle_connect` will be invoked upon establishing any connection, i.e.,
+    the intial connection and when reconnecting.
+  - The `init` callback is removed entirely.
+- Moved all the `WebSockex.Client` module functionality into the base
+  `WebSockex` module.
+  - Changed the `Application` module to `WebSockex.Application`.
+- Add `WebSockex.start` for non-linked processes.
 - Add `async` option to `start` and `start_link`.
+- Roll `handle_connect_failure` functionality into `handle_disconnect`.
+  - The first parameter of `handle_disconnect` is now a map with the keys:
+    `:reason`, `:conn`, and `:attempt_number`.
+  - `handle_disconnect` now has another return option for when wanted to
+    reconnect with different URI options or headers:
+    `{:reconnect, new_conn, new_state}`
+  - Added the `:handle_initial_conn_failure` option to the options for `start`
+    and `start_link` that will allow `handle_disconnect` to be called if we can
+    establish a connection during those functions.
+  - Removed `handle_connect_failure` entirely.
 
 ## 0.1.3
 - `Client.start_link` will no longer cause the calling process to exit on

@@ -1,21 +1,21 @@
 defmodule EchoClient do
-  use WebSockex.Client
+  use WebSockex
   require Logger
 
   def start_link do
-    WebSockex.Client.start_link("wss://echo.websocket.org/?encoding=text", __MODULE__, :state)
+    WebSockex.start_link("wss://echo.websocket.org/?encoding=text", __MODULE__, :state)
   end
 
   @spec echo(pid, String.t) :: :ok
   def echo(client, message) do
     Logger.info("Sending message: #{message}")
-    WebSockex.Client.send_frame(client, {:text, message})
+    WebSockex.send_frame(client, {:text, message})
   end
 
-  @spec send_frame(pid, WebSockex.Client.frame) :: :ok
+  @spec send_frame(pid, WebSockex.frame) :: :ok
   def send_frame(pid, {:text, msg} = frame) do
     Logger.info("Sending message: #{msg}")
-    WebSockex.Client.send_frame(pid, frame)
+    WebSockex.send_frame(pid, frame)
   end
 
   def handle_frame({:text, "Close the things!" = msg}, :state) do

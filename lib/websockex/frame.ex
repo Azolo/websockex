@@ -29,7 +29,7 @@ defmodule WebSockex.Frame do
   Parses a bitstring and returns a frame.
   """
   @spec parse_frame(bitstring) ::
-    :incomplete | {:ok, Frame.frame, Frame.buffer} | {:error, %WebSockex.FrameError{}}
+    :incomplete | {:ok, frame, buffer} | {:error, %WebSockex.FrameError{}}
   def parse_frame(data) when bit_size(data) < 16 do
     :incomplete
   end
@@ -173,6 +173,7 @@ defmodule WebSockex.Frame do
                        {:continuation | :finish, binary}) ::
     {:fragment, :text | :binary, binary} | {:text | :binary, binary} |
     {:error, %WebSockex.FragmentParseError{}}
+  def parse_fragment(fragmented_parts, continuation_frame)
   def parse_fragment({:fragment, _, _} = frame0, {:fragment, _, _} = frame1) do
     {:error,
       %WebSockex.FragmentParseError{reason: :two_start_frames,
