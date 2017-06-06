@@ -40,8 +40,10 @@ defmodule WebSockex.Conn do
     `:insecure` option is `false` (has no effect when `:insecure is true`).
     These certifications need a list of decoded binaries. See the
     [Erlang `:public_key` module][public_key] for more information.
-  - `:socket_connect_timeout` - Timeout in ms for creating a connection, default #{@socket_connect_timeout_default} ms.
-  - `:socket_recv_timeout` - Timeout in ms for receiving from socket, default #{@socket_recv_timeout_default} ms.
+  - `:socket_connect_timeout` - Timeout in ms for creating a TCP connection,
+    default #{@socket_connect_timeout_default} ms.
+  - `:socket_recv_timeout` - Timeout in ms for receiving a HTTP response header
+    from socket, default #{@socket_recv_timeout_default} ms.
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """

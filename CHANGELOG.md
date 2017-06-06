@@ -1,3 +1,10 @@
+## Unreleased
+- Added initial connection timeouts.
+  (`:socket_connect_timeout` and `:socket_recv_timeout`)
+  - Can be used as `start` or `start_link` option or as a `Conn.new` option.
+  - `:socket_connect_timeout` - The timeout for opening a TCP connection.
+  - `:socket_recv_timeout` - The timeout for receiving a HTTP response header.
+
 ## 0.2.0
 ### Major Changes
 - Moved all the `WebSockex.Client` module functionality into the base
