@@ -19,7 +19,8 @@ defmodule WebSockex.ConnTest do
     regular_uri = URI.parse("ws://localhost/ws")
     assert WebSockex.Conn.new(regular_uri,
                                extra_headers: [{"Pineapple", "Cake"}, ],
-                               socket_opts: [connection_timeout: 123, recv_timeout: 123]) ==
+                               socket_connect_timeout: 123,
+                               socket_recv_timeout: 456) ==
       %WebSockex.Conn{host: "localhost",
                       port: 80,
                       path: "/ws",
@@ -28,7 +29,8 @@ defmodule WebSockex.ConnTest do
                       transport: :tcp,
                       extra_headers: [{"Pineapple", "Cake"}],
                       socket: nil,
-                      socket_opts: [connection_timeout: 123, recv_timeout: 123]}
+                      socket_connect_timeout: 123,
+                      socket_recv_timeout: 456}
 
     ssl_uri = URI.parse("wss://localhost/ws")
     assert WebSockex.Conn.new(ssl_uri, extra_headers: [{"Pineapple", "Cake"}]) ==
@@ -40,7 +42,8 @@ defmodule WebSockex.ConnTest do
                       transport: :ssl,
                       extra_headers: [{"Pineapple", "Cake"}],
                       socket: nil,
-                      socket_opts: []}
+                      socket_connect_timeout: 6000,
+                      socket_recv_timeout: 5000}
   end
 
   test "open_socket", context do
