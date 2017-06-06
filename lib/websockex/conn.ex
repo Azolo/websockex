@@ -7,6 +7,9 @@ defmodule WebSockex.Conn do
   Is woefully inadequite for verifying proper peers in SSL connections.
   """
 
+  @socket_connect_timeout_default 6000
+  @socket_recv_timeout_default 5000
+
   defstruct conn_mod: nil,
             host: nil,
             port: nil,
@@ -15,6 +18,8 @@ defmodule WebSockex.Conn do
             extra_headers: [],
             transport: nil,
             socket: nil,
+            socket_connect_timeout: @socket_connect_timeout_default,
+            socket_recv_timeout: @socket_recv_timeout_default,
             cacerts: nil,
             insecure: true
 
@@ -35,12 +40,16 @@ defmodule WebSockex.Conn do
     `:insecure` option is `false` (has no effect when `:insecure is true`).
     These certifications need a list of decoded binaries. See the
     [Erlang `:public_key` module][public_key] for more information.
+  - `:socket_connect_timeout` - Timeout in ms for creating a connection, default #{@socket_connect_timeout_default} ms.
+  - `:socket_recv_timeout` - Timeout in ms for receiving from socket, default #{@socket_recv_timeout_default} ms.
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """
   @type connection_option :: {:extra_headers, [header]} |
                              {:cacerts, [certification]} |
-                             {:insecure, boolean}
+                             {:insecure, boolean} |
+                             {:socket_connect_timeout, non_neg_integer}|
+                             {:socket_recv_timeout, non_neg_integer}
 
   @type t :: %__MODULE__{conn_mod: :gen_tcp | :ssl,
                          host: String.t,
@@ -49,7 +58,9 @@ defmodule WebSockex.Conn do
                          query: String.t | nil,
                          extra_headers: [header],
                          transport: transport,
-                         socket: socket}
+                         socket: socket,
+                         socket_connect_timeout: non_neg_integer,
+                         socket_recv_timeout: non_neg_integer}
 
   @doc """
   Returns a new `WebSockex.Conn` struct from a uri and options.
@@ -66,7 +77,9 @@ defmodule WebSockex.Conn do
                     transport: transport(mod),
                     extra_headers: Keyword.get(opts, :extra_headers, []),
                     cacerts: Keyword.get(opts, :cacerts, nil),
-                    insecure: Keyword.get(opts, :insecure, true)}
+                    insecure: Keyword.get(opts, :insecure, true),
+                    socket_connect_timeout: Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
+                    socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default)}
   end
 
   @doc """
@@ -89,7 +102,7 @@ defmodule WebSockex.Conn do
     case :gen_tcp.connect(String.to_charlist(conn.host),
                           conn.port,
                           [:binary, active: false, packet: 0],
-                          6000) do
+                          conn.socket_connect_timeout) do
       {:ok, socket} ->
         {:ok, Map.put(conn, :socket, socket)}
       {:error, error} ->
@@ -100,7 +113,7 @@ defmodule WebSockex.Conn do
     case :ssl.connect(String.to_charlist(conn.host),
                       conn.port,
                       ssl_connection_options(conn),
-                      6000) do
+                      conn.socket_connect_timeout) do
       {:ok, socket} ->
         {:ok, Map.put(conn, :socket, socket)}
       {:error, error} ->
@@ -185,7 +198,7 @@ defmodule WebSockex.Conn do
     case Regex.match?(~r/\r\n\r\n/, buffer) do
       true -> {:ok, buffer}
       false ->
-        with {:ok, data} <- conn.conn_mod.recv(conn.socket, 0, 5000) do
+        with {:ok, data} <- conn.conn_mod.recv(conn.socket, 0, conn.socket_recv_timeout) do
           wait_for_response(conn, buffer <> data)
         else
           {:error, reason} -> {:error, %WebSockex.ConnError{original: reason}}
