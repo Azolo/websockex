@@ -89,7 +89,7 @@ defmodule WebSockex do
 
   This is invoked after both the initial connection and a reconnect.
   """
-  @callback handle_connect(state :: term, conn :: WebSockex.Conn.t) ::
+  @callback handle_connect(conn :: WebSockex.Conn.t, state :: term) ::
     {:ok, new_state :: term}
 
   @doc """
@@ -187,7 +187,7 @@ defmodule WebSockex do
       @behaviour WebSockex
 
       @doc false
-      def handle_connect(state, _conn) do
+      def handle_connect(_conn, state) do
         {:ok, state}
       end
 
@@ -364,7 +364,7 @@ defmodule WebSockex do
   end
 
   defp reconnect(parent, debug, state) do
-    case apply(state.module, :handle_connect, [state.module_state, state.conn]) do
+    case apply(state.module, :handle_connect, [state.conn, state.module_state]) do
       {:ok, new_module_state} ->
          state = Map.merge(state, %{buffer: <<>>,
                                     fragment: nil,
@@ -372,7 +372,7 @@ defmodule WebSockex do
           websocket_loop(parent, debug, state)
       badreply ->
         raise %WebSockex.BadResponseError{module: state.module, function: :handle_connect,
-          args: [state.module_state, state.conn], response: badreply}
+          args: [state.conn, state.module_state], response: badreply}
     end
   end
 
@@ -501,7 +501,7 @@ defmodule WebSockex do
   end
 
   defp module_init(parent, debug, state) do
-    case apply(state.module, :handle_connect, [state.module_state, state.conn]) do
+    case apply(state.module, :handle_connect, [state.conn, state.module_state]) do
       {:ok, new_module_state} ->
          state.reply_fun.({:ok, self()})
          state = Map.merge(state, %{buffer: <<>>,
@@ -512,7 +512,7 @@ defmodule WebSockex do
           websocket_loop(parent, debug, state)
       badreply ->
         raise %WebSockex.BadResponseError{module: state.module, function: :handle_connect,
-          args: [state.module_state, state.conn], response: badreply}
+          args: [state.conn, state.module_state], response: badreply}
     end
   end
 

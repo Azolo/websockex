@@ -25,11 +25,11 @@ defmodule WebSockexTest do
       WebSockex.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
-    def handle_connect(%{catch_connect: pid} = args, _conn) do
+    def handle_connect(_conn, %{catch_connect: pid} = args) do
       send(pid, :caught_connect)
       {:ok, args}
     end
-    def handle_connect(%{async_test: true}, _conn) do
+    def handle_connect(_conn, %{async_test: true}) do
       receive do
         {:continue_async, pid} ->
           send(pid, :async_test)
@@ -39,7 +39,7 @@ defmodule WebSockexTest do
             raise "Async Timeout"
       end
     end
-    def handle_connect(state, conn) do
+    def handle_connect(conn, state) do
       {:ok, Map.put(state, :conn, conn)}
     end
 

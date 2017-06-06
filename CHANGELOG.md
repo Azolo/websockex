@@ -1,4 +1,9 @@
 ## Unreleased
+### Breaking Changes
+- The parameters for the `handle_connect/2` callback have been reversed. The
+  order is now `(conn, state)`.
+
+### Enhancements
 - Added initial connection timeouts.
   (`:socket_connect_timeout` and `:socket_recv_timeout`)
   - Can be used as `start` or `start_link` option or as a `Conn.new` option.
