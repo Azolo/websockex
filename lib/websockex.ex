@@ -458,7 +458,9 @@ defmodule WebSockex do
   end
 
   defp common_handle({function, msg}, parent, debug, state) do
-    case apply(state.module, function, [msg, state.module_state]) do
+    result = try_callback(state.module, function, [msg, state.module_state])
+
+    case result do
       {:ok, new_state} ->
         websocket_loop(parent, debug, %{state | module_state: new_state})
       {:reply, frame, new_state} ->
@@ -473,14 +475,13 @@ defmodule WebSockex do
         handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
       {:close, {close_code, message}, new_state} ->
         handle_close({:local, close_code, message}, parent, debug, %{state | module_state: new_state})
+      {:"$EXIT", reason} ->
+        terminate(reason, parent, debug, state)
       badreply ->
-        raise %WebSockex.BadResponseError{module: state.module,
-          function: function, args: [msg, state.module_state],
-          response: badreply}
+        error = %WebSockex.BadResponseError{module: state.module, function: function,
+          args: [msg, state.module_state], response: badreply}
+        terminate(error, parent, debug, state)
     end
-  rescue
-    exception ->
-      terminate({exception, System.stacktrace}, parent, debug, state)
   end
 
   defp handle_close({:remote, :closed} = reason, parent, debug, state) do
@@ -590,6 +591,17 @@ defmodule WebSockex do
                                           args: [status_map, state.module_state],
                                           response: badreply}
     end
+  end
+
+  defp try_callback(module, function, args) do
+    apply(module, function, args)
+  catch
+    :error, payload ->
+      stacktrace = System.stacktrace()
+      reason = Exception.normalize(:error, payload, stacktrace)
+      {:"$EXIT", {reason, stacktrace}}
+    :exit, payload ->
+      {:"$EXIT", payload}
   end
 
   defp send_close_frame(reason, conn) do

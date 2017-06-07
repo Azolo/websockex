@@ -48,7 +48,7 @@ defmodule WebSockexTest do
       {:ok, state}
     end
     def handle_cast({:set_state, state}, _state), do: {:ok, state}
-    def handle_cast(:error, _), do: raise "an error"
+    def handle_cast(:error, _), do: raise "Cast Error"
     def handle_cast({:set_attr, key, attr}, state), do: {:ok, Map.put(state, key, attr)}
     def handle_cast({:get_state, pid}, state) do
       send(pid, state)
@@ -57,6 +57,7 @@ defmodule WebSockexTest do
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
     def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
+    def handle_cast(:bad_reply, _), do: :lemon_pie
     def handle_cast(:delayed_close, state) do
       receive do
         {:tcp_closed, socket} ->
@@ -79,9 +80,8 @@ defmodule WebSockexTest do
       send(pid, :info)
       {:ok, state}
     end
-    def handle_info(:bad_reply, _) do
-      :lemon_pie
-    end
+    def handle_info(:bad_reply, _), do: :lemon_pie
+    def handle_info(:error, _), do: raise "Info Error"
 
     # Implicitly test default implementation defined with using through super
     def handle_pong(:pong = frame, %{catch_pong: pid} = state) do
@@ -100,6 +100,12 @@ defmodule WebSockexTest do
     def handle_frame({:text, msg}, %{catch_text: pid} = state) do
       send(pid, {:caught_text, msg})
       {:ok, state}
+    end
+    def handle_frame({:text, "Bad Reply"}, _) do
+      :lemon_pie
+    end
+    def handle_frame({:text, "Error"}, _) do
+      raise "Frame Error"
     end
 
     def handle_disconnect(_, %{catch_init_connect_failure: pid} = state) do
@@ -448,18 +454,52 @@ defmodule WebSockexTest do
       TestClient.catch_attr(context.pid, :terminate, self())
     end
 
-    test "executes in a handle_info error", context do
-      Process.unlink(context.pid)
-      send(context.pid, :bad_reply)
+    test "executes in a handle_info bad reply", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      send(pid, :bad_reply)
 
-      assert_receive :terminate
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
     end
 
-    test "executes in handle_cast error", context do
-      Process.unlink(context.pid)
-      WebSockex.cast(context.pid, :error)
+    test "executes in a handle_info error", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      send(pid, :error)
 
-      assert_receive :terminate
+      assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Info Error"}, _}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_cast bad reply", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, :bad_reply)
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_cast error", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, :error)
+
+      assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Cast Error"}, _}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_frame bad reply", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:text, "Bad Reply"}}
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_frame error", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:text, "Error"}}
+
+      assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Frame Error"}, _}}
+      assert_received :terminate
     end
 
     test "executes in a frame close", context do
@@ -659,12 +699,6 @@ defmodule WebSockexTest do
       assert_receive {:caught_text, "Hello"}
     end
 
-  end
-
-  test "Raises a BadResponseError when a non valid callback response is given", context do
-    Process.flag(:trap_exit, true)
-    send(context.pid, :bad_reply)
-    assert_receive {:EXIT, _, {%WebSockex.BadResponseError{}, _}}
   end
 
   test "Won't exit on a request error", context do
