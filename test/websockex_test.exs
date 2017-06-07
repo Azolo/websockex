@@ -48,7 +48,6 @@ defmodule WebSockexTest do
       {:ok, state}
     end
     def handle_cast({:set_state, state}, _state), do: {:ok, state}
-    def handle_cast(:error, _), do: raise "Cast Error"
     def handle_cast({:set_attr, key, attr}, state), do: {:ok, Map.put(state, key, attr)}
     def handle_cast({:get_state, pid}, state) do
       send(pid, state)
@@ -57,7 +56,6 @@ defmodule WebSockexTest do
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
     def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
-    def handle_cast(:bad_reply, _), do: :lemon_pie
     def handle_cast(:delayed_close, state) do
       receive do
         {:tcp_closed, socket} ->
@@ -72,6 +70,9 @@ defmodule WebSockexTest do
     def handle_cast(:test_reconnect, state) do
       {:close, {4985, "Testing Reconnect"}, state}
     end
+    def handle_cast(:bad_reply, _), do: :lemon_pie
+    def handle_cast(:error, _), do: raise "Cast Error"
+    def handle_cast(:exit, _), do: exit "Cast Exit"
 
     def handle_info({:send, frame}, state), do: {:reply, frame, state}
     def handle_info(:close, state), do: {:close, state}
@@ -82,6 +83,7 @@ defmodule WebSockexTest do
     end
     def handle_info(:bad_reply, _), do: :lemon_pie
     def handle_info(:error, _), do: raise "Info Error"
+    def handle_info(:exit, _), do: exit "Info Exit"
 
     # Implicitly test default implementation defined with using through super
     def handle_pong(:pong = frame, %{catch_pong: pid} = state) do
@@ -101,12 +103,9 @@ defmodule WebSockexTest do
       send(pid, {:caught_text, msg})
       {:ok, state}
     end
-    def handle_frame({:text, "Bad Reply"}, _) do
-      :lemon_pie
-    end
-    def handle_frame({:text, "Error"}, _) do
-      raise "Frame Error"
-    end
+    def handle_frame({:text, "Bad Reply"}, _), do: :lemon_pie
+    def handle_frame({:text, "Error"}, _), do: raise "Frame Error"
+    def handle_frame({:text, "Exit"}, _), do: exit "Frame Exit"
 
     def handle_disconnect(_, %{catch_init_connect_failure: pid} = state) do
       send(pid, :caught_initial_conn_failure)
@@ -470,6 +469,14 @@ defmodule WebSockexTest do
       assert_received :terminate
     end
 
+    test "executes in a handle_info exit", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      send(pid, :exit)
+
+      assert_receive {:EXIT, ^pid, "Info Exit"}
+      assert_received :terminate
+    end
+
     test "executes in handle_cast bad reply", %{pid: pid} do
       Process.flag(:trap_exit, true)
       WebSockex.cast(pid, :bad_reply)
@@ -486,6 +493,14 @@ defmodule WebSockexTest do
       assert_received :terminate
     end
 
+    test "executes in handle_cast exit", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, :exit)
+
+      assert_receive {:EXIT, ^pid, "Cast Exit"}
+      assert_received :terminate
+    end
+
     test "executes in handle_frame bad reply", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:text, "Bad Reply"}}
@@ -499,6 +514,14 @@ defmodule WebSockexTest do
       send context.server_pid, {:send, {:text, "Error"}}
 
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Frame Error"}, _}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_frame exit", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:text, "Exit"}}
+
+      assert_receive {:EXIT, ^pid, "Frame Exit"}
       assert_received :terminate
     end
 
