@@ -85,6 +85,11 @@ defmodule WebSockexTest do
     def handle_info(:error, _), do: raise "Info Error"
     def handle_info(:exit, _), do: exit "Info Exit"
 
+    def handle_ping({:ping, "Bad Reply"}, _), do: :lemon_pie
+    def handle_ping({:ping, "Error"}, _), do: raise "Ping Error"
+    def handle_ping({:ping, "Exit"}, _), do: exit "Ping Exit"
+    def handle_ping(frame, state), do: super(frame, state)
+
     # Implicitly test default implementation defined with using through super
     def handle_pong(:pong = frame, %{catch_pong: pid} = state) do
       send(pid, :caught_pong)
@@ -94,6 +99,9 @@ defmodule WebSockexTest do
       send(pid, {:caught_payload_pong, msg})
       super(frame, state)
     end
+    def handle_pong({:pong, "Bad Reply"}, _), do: :lemon_pie
+    def handle_pong({:pong, "Error"}, _), do: raise "Pong Error"
+    def handle_pong({:pong, "Exit"}, _), do: exit "Pong Exit"
 
     def handle_frame({:binary, msg}, %{catch_binary: pid} = state) do
       send(pid, {:caught_binary, msg})
@@ -522,6 +530,54 @@ defmodule WebSockexTest do
       send context.server_pid, {:send, {:text, "Exit"}}
 
       assert_receive {:EXIT, ^pid, "Frame Exit"}
+      assert_received :terminate
+    end
+
+    test "executes in handle_ping bad reply", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:ping, "Bad Reply"}}
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_ping error", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:ping, "Error"}}
+
+      assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Ping Error"}, _}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_ping exit", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:ping, "Exit"}}
+
+      assert_receive {:EXIT, ^pid, "Ping Exit"}
+      assert_received :terminate
+    end
+
+    test "executes in handle_pong bad reply", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:pong, "Bad Reply"}}
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_pong error", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:pong, "Error"}}
+
+      assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Pong Error"}, _}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_pong exit", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      send context.server_pid, {:send, {:pong, "Exit"}}
+
+      assert_receive {:EXIT, ^pid, "Pong Exit"}
       assert_received :terminate
     end
 
