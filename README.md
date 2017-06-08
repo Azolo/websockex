@@ -5,7 +5,7 @@
 
 An Elixir Websocket Client.
 
-The simplest implemenation is
+A simple implemenation would be
 
 ```elixir
 defmodule WebSocketExample do
