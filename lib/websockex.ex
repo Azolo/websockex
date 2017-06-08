@@ -50,7 +50,7 @@ defmodule WebSockex do
     only matters during process initialization. The `handle_disconnect`
     callback is always invoked if an established connection is lost.
 
-  Other possible option values include: `t:WebSockex.connection_option/0`
+  Other possible option values include: `t:WebSockex.Conn.connection_option/0`
   """
   @type option :: WebSockex.Conn.connection_option
                   | {:async, boolean}
@@ -239,13 +239,21 @@ defmodule WebSockex do
   @doc """
   Starts a `WebSockex` process.
 
-  For available option values see `t:option/0`.
+  Acts like `start_link/4`, except doesn't link the current process.
+
+  See `start_link/4` for more information.
   """
-  @spec start(String.t, module, term, options) :: {:ok, pid} | {:error, term}
-  def start(url, module, state, opts \\ []) do
+  @spec start(url :: String.t | WebSockex.Conn.t, module, term, options) ::
+    {:ok, pid} | {:error, term}
+  def start(conn_info, module, state, opts \\ [])
+  def start(%WebSockex.Conn{} = conn, module, state, opts) do
+    :proc_lib.start(__MODULE__, :init, [self(), conn, module, state, opts])
+  end
+  def start(url, module, state, opts) do
     case parse_uri(url) do
       {:ok, uri} ->
-        :proc_lib.start(__MODULE__, :init, [self(), uri, module, state, opts])
+        conn = WebSockex.Conn.new(uri, opts)
+        start(conn, module, state, opts)
       {:error, error} ->
         {:error, error}
     end
@@ -256,14 +264,23 @@ defmodule WebSockex do
 
   For available option values see `t:option/0`.
 
+  If a `WebSockex.Conn.t` is used in place of a url string, then the options
+  available in `t:WebSockex.Conn.connection_option/0` have effect.
+
   The callback `c:handle_connect/2` is invoked after the connection is
   established.
   """
-  @spec start_link(String.t, module, term, options) :: {:ok, pid} | {:error, term}
-  def start_link(url, module, state, opts \\ []) do
+  @spec start_link(url :: String.t | WebSockex.Conn.t, module, term, options) ::
+    {:ok, pid} | {:error, term}
+  def start_link(conn_info, module, state, opts \\ [])
+  def start_link(conn = %WebSockex.Conn{}, module, state, opts) do
+    :proc_lib.start_link(__MODULE__, :init, [self(), conn, module, state, opts])
+  end
+  def start_link(url, module, state, opts) do
     case parse_uri(url) do
       {:ok, uri} ->
-        :proc_lib.start_link(__MODULE__, :init, [self(), uri, module, state, opts])
+        conn = WebSockex.Conn.new(uri, opts)
+        start_link(conn, module, state, opts)
       {:error, error} ->
         {:error, error}
     end
@@ -290,11 +307,11 @@ defmodule WebSockex do
   end
 
   @doc false
-  @spec init(pid, URI.t, module, term, options) :: {:ok, pid} | {:error, term}
-  def init(parent, uri, module, module_state, opts) do
+  @spec init(pid, WebSockex.Conn.t, module, term, options) ::
+    {:ok, pid} | {:error, term}
+  def init(parent, conn, module, module_state, opts) do
     # OTP stuffs
     debug = :sys.debug_options([])
-    conn = WebSockex.Conn.new(uri, opts)
 
     reply_fun = case Keyword.get(opts, :async, false) do
                   true ->

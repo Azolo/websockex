@@ -9,6 +9,7 @@
   - Can be used as `start` or `start_link` option or as a `Conn.new` option.
   - `:socket_connect_timeout` - The timeout for opening a TCP connection.
   - `:socket_recv_timeout` - The timeout for receiving a HTTP response header.
+- `start` and `start_link` can now take a `Conn` struct in place of a url.
 
 ### Bug Fixes
 - Ensure `terminate/2` callback is called consistently.

@@ -187,6 +187,16 @@ defmodule WebSockexTest do
   end
 
   describe "start" do
+    test "with a Conn struct", context do
+      conn = WebSockex.Conn.new(URI.parse(context.url))
+
+      assert {:ok, _} = WebSockex.start(conn, TestClient, %{catch_text: self()})
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      send(server_pid, {:send, {:text, "Start Link Conn"}})
+      assert_receive {:caught_text, "Start Link Conn"}
+    end
+
     test "with async option failure", context do
       assert {:ok, pid} =
         TestClient.start(context.url, %{async_test: true}, async: true)
@@ -212,6 +222,16 @@ defmodule WebSockexTest do
   end
 
   describe "start_link" do
+    test "with a Conn struct", context do
+      conn = WebSockex.Conn.new(URI.parse(context.url))
+
+      assert {:ok, _} = WebSockex.start_link(conn, TestClient, %{catch_text: self()})
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      send(server_pid, {:send, {:text, "Start Link Conn"}})
+      assert_receive {:caught_text, "Start Link Conn"}
+    end
+
     test "with async option", context do
       assert {:ok, _} =
         TestClient.start_link(context.url, %{catch_text: self()}, async: true)
