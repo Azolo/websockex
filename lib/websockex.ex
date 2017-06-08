@@ -301,7 +301,7 @@ defmodule WebSockex do
                     :proc_lib.init_ack(parent, {:ok, self()})
                     &async_init_fun/1
                   false ->
-                    &:proc_lib.init_ack(parent, &1)
+                    &sync_init_fun(parent, &1)
                 end
 
     state = %{conn: conn,
@@ -367,15 +367,21 @@ defmodule WebSockex do
   end
 
   defp reconnect(parent, debug, state) do
-    case apply(state.module, :handle_connect, [state.conn, state.module_state]) do
+    result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
+
+    case result do
       {:ok, new_module_state} ->
-         state = Map.merge(state, %{buffer: <<>>,
-                                    fragment: nil,
-                                    module_state: new_module_state})
-          websocket_loop(parent, debug, state)
+        state = Map.merge(state, %{buffer: <<>>,
+                                   fragment: nil,
+                                   module_state: new_module_state})
+         websocket_loop(parent, debug, state)
+      {:"$EXIT", reason} ->
+        terminate(reason, parent, debug, state)
       badreply ->
-        raise %WebSockex.BadResponseError{module: state.module, function: :handle_connect,
-          args: [state.conn, state.module_state], response: badreply}
+        reason =  %WebSockex.BadResponseError{module: state.module,
+          function: :handle_connect, args: [state.conn, state.module_state],
+          response: badreply}
+        terminate(reason, parent, debug, state)
     end
   end
 
@@ -505,7 +511,9 @@ defmodule WebSockex do
   end
 
   defp module_init(parent, debug, state) do
-    case apply(state.module, :handle_connect, [state.conn, state.module_state]) do
+    result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
+
+    case result do
       {:ok, new_module_state} ->
          state.reply_fun.({:ok, self()})
          state = Map.merge(state, %{buffer: <<>>,
@@ -514,9 +522,13 @@ defmodule WebSockex do
                  |> Map.delete(:reply_fun)
 
           websocket_loop(parent, debug, state)
+      {:"$EXIT", reason} ->
+        state.reply_fun.(reason)
       badreply ->
-        raise %WebSockex.BadResponseError{module: state.module, function: :handle_connect,
-          args: [state.conn, state.module_state], response: badreply}
+        reason = {:error, %WebSockex.BadResponseError{module: state.module,
+          function: :handle_connect, args: [state.conn, state.module_state],
+          response: badreply}}
+        state.reply_fun.(reason)
     end
   end
 
@@ -628,6 +640,12 @@ defmodule WebSockex do
 
   defp async_init_fun({:ok, _}), do: :noop
   defp async_init_fun(exit_reason), do: exit(exit_reason)
+  defp sync_init_fun(parent, {error, stacktrace}) when is_list(stacktrace) do
+    :proc_lib.init_ack(parent, {:error, error})
+  end
+  defp sync_init_fun(parent, reply) do
+    :proc_lib.init_ack(parent, reply)
+  end
 
   defp close_loop(reason, parent, debug, %{conn: conn} = state) do
     transport = state.conn.transport

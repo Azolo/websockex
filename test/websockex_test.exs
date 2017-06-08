@@ -25,6 +25,9 @@ defmodule WebSockexTest do
       WebSockex.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
+    def handle_connect(_conn, %{connect_badreply: true}), do: :lemons
+    def handle_connect(_conn, %{connect_error: true}), do: raise "Connect Error"
+    def handle_connect(_conn, %{connect_exit: true}), do: exit "Connect Exit"
     def handle_connect(_conn, %{catch_connect: pid} = args) do
       send(pid, :caught_connect)
       {:ok, args}
@@ -618,6 +621,48 @@ defmodule WebSockexTest do
       assert {:error, %WebSockex.BadResponseError{}} =
         TestClient.start_link(context.url <> "bad",
                               %{disconnect_badreply: true},
+                              handle_initial_conn_failure: true)
+
+      refute_received :terminate
+    end
+
+    test "executes in handle_connect bad reply", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, {:set_attr, :connect_badreply, true})
+      WebSockex.cast(pid, {:set_attr, :reconnect, true})
+
+      WebSockex.cast(pid, :close)
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_connect error", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, {:set_attr, :connect_badreply, true})
+      WebSockex.cast(pid, {:set_attr, :reconnect, true})
+
+      WebSockex.cast(pid, :close)
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_connect exit", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, {:set_attr, :connect_badreply, true})
+      WebSockex.cast(pid, {:set_attr, :reconnect, true})
+
+      WebSockex.cast(pid, :close)
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "is not executed in handle_connect before initialized", context do
+      assert {:error, %WebSockex.BadResponseError{}} =
+        TestClient.start_link(context.url,
+                              %{connect_badreply: true},
                               handle_initial_conn_failure: true)
 
       refute_received :terminate
