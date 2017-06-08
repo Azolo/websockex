@@ -429,6 +429,8 @@ defmodule WebSockex do
             handle_close({:remote, :closed}, parent, debug, state)
           :"websockex_close_timeout" ->
             websocket_loop(parent, debug, state)
+          {:EXIT, ^parent, reason} ->
+            terminate(reason, parent, debug, state)
           msg ->
             common_handle({:handle_info, msg}, parent, debug, state)
         end

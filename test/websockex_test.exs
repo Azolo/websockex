@@ -906,4 +906,15 @@ defmodule WebSockexTest do
       end) =~ "No handle_info/2 clause in #{__MODULE__}.BareClient provided for :info"
     end
   end
+
+  describe "OTP Compliance" do
+    test "requires the child to exit when receiving a parent exit signal", context do
+      Process.flag(:trap_exit, true)
+      {:ok, pid} = WebSockex.start_link(context.url, BareClient, [])
+
+      send(pid, {:EXIT, self(), "OTP Compliance Test"})
+
+      assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
+    end
+  end
 end
