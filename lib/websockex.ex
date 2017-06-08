@@ -360,6 +360,9 @@ defmodule WebSockex do
           {:error, new_reason} ->
             on_disconnect(new_reason, parent, debug, state, callbacks, attempt+1)
         end
+      {:"$EXIT", reason} ->
+        callback = Keyword.get(callbacks, :failure, &terminate/4)
+        callback.(reason, parent, debug, state)
     end
   end
 
@@ -578,18 +581,21 @@ defmodule WebSockex do
                    reason: reason,
                    attempt_number: attempt}
 
-    case apply(state.module, :handle_disconnect, [status_map, state.module_state]) do
+    result = try_callback(state.module, :handle_disconnect, [status_map, state.module_state])
+
+    case result do
       {:ok, new_state} ->
         {:ok, new_state}
       {:reconnect, new_state} ->
         {:reconnect, state.conn, new_state}
       {:reconnect, new_conn, new_state} ->
         {:reconnect, new_conn, new_state}
+      {:"$EXIT", _} = res ->
+        res
       badreply ->
-        raise %WebSockex.BadResponseError{module: state.module,
-                                          function: :handle_disconnect,
-                                          args: [status_map, state.module_state],
-                                          response: badreply}
+        {:"$EXIT", %WebSockex.BadResponseError{module: state.module,
+          function: :handle_disconnect, args: [status_map, state.module_state],
+          response: badreply}}
     end
   end
 

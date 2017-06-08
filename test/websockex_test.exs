@@ -115,6 +115,9 @@ defmodule WebSockexTest do
     def handle_frame({:text, "Error"}, _), do: raise "Frame Error"
     def handle_frame({:text, "Exit"}, _), do: exit "Frame Exit"
 
+    def handle_disconnect(_, %{disconnect_badreply: true}), do: :lemons
+    def handle_disconnect(_, %{disconnect_error: true}), do: raise "Disconnect Error"
+    def handle_disconnect(_, %{disconnect_exit: true}), do: exit "Disconnect Exit"
     def handle_disconnect(_, %{catch_init_connect_failure: pid} = state) do
       send(pid, :caught_initial_conn_failure)
       {:ok, state}
@@ -579,6 +582,45 @@ defmodule WebSockexTest do
 
       assert_receive {:EXIT, ^pid, "Pong Exit"}
       assert_received :terminate
+    end
+
+    test "executes in handle_disconnect bad reply", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, {:set_attr, :disconnect_badreply, true})
+
+      WebSockex.cast(pid, :close)
+
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_disconnect error", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, {:set_attr, :disconnect_error, true})
+
+      WebSockex.cast(pid, :close)
+
+      assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Disconnect Error"}, _}}
+      assert_received :terminate
+    end
+
+    test "executes in handle_disconnect exit", %{pid: pid} do
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, {:set_attr, :disconnect_exit, true})
+
+      WebSockex.cast(pid, :close)
+
+      assert_receive {:EXIT, ^pid, "Disconnect Exit"}
+      assert_received :terminate
+    end
+
+    test "is not executed in handle_disconnect before initialized", context do
+      assert {:error, %WebSockex.BadResponseError{}} =
+        TestClient.start_link(context.url <> "bad",
+                              %{disconnect_badreply: true},
+                              handle_initial_conn_failure: true)
+
+      refute_received :terminate
     end
 
     test "executes in a frame close", context do
