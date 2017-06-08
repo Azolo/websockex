@@ -9,8 +9,10 @@
   - Can be used as `start` or `start_link` option or as a `Conn.new` option.
   - `:socket_connect_timeout` - The timeout for opening a TCP connection.
   - `:socket_recv_timeout` - The timeout for receiving a HTTP response header.
-- Ensure `terminate/2` callback is called consistently
+- Ensure `terminate/2` callback is called consistently.
 - Ensure when termination when a parent exit signal is received.
+- Add the `system_code_change` function so that the `code_change` callback is
+  actually used.
 
 ## 0.2.0
 ### Major Changes

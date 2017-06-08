@@ -344,6 +344,17 @@ defmodule WebSockex do
     {:ok, new_state, new_state}
   end
 
+  @doc false
+  def system_code_change(state, _mod, old_vsn, extra) do
+    case apply(state.module, :code_change, [old_vsn, state.module_state, extra]) do
+      {:ok, new_module_state} ->
+        {:ok, %{state | module_state: new_module_state}}
+      other -> other
+    end
+  catch
+    other -> other
+  end
+
   # Internals! Yay
 
   defp on_disconnect(reason, parent, debug, state, callbacks \\ [], attempt \\ 1) do
