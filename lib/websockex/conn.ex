@@ -190,6 +190,14 @@ defmodule WebSockex.Conn do
     :ssl.setopts(conn.socket, active: val)
   end
 
+  @doc """
+  Set the socket's controlling process.
+  """
+  @spec controlling_process(__MODULE__.t, new_owner :: pid) :: :ok | {:error, term}
+  def controlling_process(conn, new_owner) do
+    conn.conn_mod.controlling_process(conn.socket, new_owner)
+  end
+
   defp transport(:gen_tcp), do: :tcp
   defp transport(:ssl), do: :ssl
 
