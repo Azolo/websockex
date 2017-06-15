@@ -428,7 +428,15 @@ defmodule WebSockex do
         {:ok, conn}
       end
     end)
-    Task.await(task, :infinity) # Timeouts built into the task
+    open_connection_loop(task)
+  end
+
+  defp open_connection_loop(%{ref: ref}) do
+    receive do
+      {^ref, res} ->
+        Process.demonitor(ref, [:flush])
+        res
+    end
   end
 
   defp validate_handshake(headers, key) do
