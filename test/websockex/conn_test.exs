@@ -172,4 +172,16 @@ defmodule WebSockex.ConnTest do
     assert request =~ ~r(X-Test: Shoes\r\n)
     assert request =~ ~r(\r\n\r\n\z)
   end
+
+  test "controlling_process", %{conn: conn} do
+    socket = conn.socket
+    # Start a random process
+    {:ok, agent_pid} = Agent.start_link(fn -> :test end)
+
+    assert :erlang.port_info(socket, :connected) == {:connected, self()}
+
+    WebSockex.Conn.controlling_process(conn, agent_pid)
+
+    assert :erlang.port_info(socket, :connected) == {:connected, agent_pid}
+  end
 end
