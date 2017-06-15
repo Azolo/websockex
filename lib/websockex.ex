@@ -414,14 +414,21 @@ defmodule WebSockex do
   end
 
   defp open_connection(conn) do
-    with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
-         key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
-         {:ok, request} <- WebSockex.Conn.build_request(conn, key),
-         :ok <- WebSockex.Conn.socket_send(conn, request),
-         {:ok, headers} <- WebSockex.Conn.handle_response(conn),
-         :ok <- validate_handshake(headers, key),
-         :ok <- WebSockex.Conn.set_active(conn),
-    do: {:ok, conn}
+    my_pid = self()
+    task = Task.async(fn ->
+      with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
+           key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
+           {:ok, request} <- WebSockex.Conn.build_request(conn, key),
+           :ok <- WebSockex.Conn.socket_send(conn, request),
+           {:ok, headers} <- WebSockex.Conn.handle_response(conn),
+           :ok <- validate_handshake(headers, key),
+           :ok <- WebSockex.Conn.set_active(conn)
+      do
+        :ok = WebSockex.Conn.controlling_process(conn, my_pid)
+        {:ok, conn}
+      end
+    end)
+    Task.await(task, :infinity) # Timeouts built into the task
   end
 
   defp validate_handshake(headers, key) do
