@@ -328,12 +328,12 @@ defmodule WebSockex do
 
     handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
 
-    case open_connection(state.conn) do
-      {:ok, new_conn} ->
-        module_init(parent, debug, %{state | conn: new_conn})
-      {:error, error} when handle_conn_failure == true ->
-        on_disconnect(error, parent, debug, state, success: &module_init/3, failure: &init_failure/4)
-      {:error, error} ->
+    case open_connection(parent, debug, state) do
+      {:ok, new_state} ->
+        module_init(parent, debug, new_state)
+      {:error, error, new_state} when handle_conn_failure == true ->
+        on_disconnect(error, parent, debug, new_state, success: &module_init/3, failure: &init_failure/4)
+      {:error, error, _} ->
         state.reply_fun.({:error, error})
     end
   end
@@ -381,12 +381,12 @@ defmodule WebSockex do
         callback.(reason, parent, debug, %{state | module_state: new_module_state})
       {:reconnect, new_conn, new_module_state} ->
         state = %{state | conn: new_conn, module_state: new_module_state}
-        case open_connection(new_conn) do
-          {:ok, success_conn} ->
+        case open_connection(parent, debug, state) do
+          {:ok, new_state} ->
             callback = Keyword.get(callbacks, :success, &reconnect/3)
-            callback.(parent, debug, %{state | conn: success_conn})
-          {:error, new_reason} ->
-            on_disconnect(new_reason, parent, debug, state, callbacks, attempt+1)
+            callback.(parent, debug, new_state)
+          {:error, new_reason, new_state} ->
+            on_disconnect(new_reason, parent, debug, new_state, callbacks, attempt+1)
         end
       {:"$EXIT", reason} ->
         callback = Keyword.get(callbacks, :failure, &terminate/4)
@@ -413,7 +413,7 @@ defmodule WebSockex do
     end
   end
 
-  defp open_connection(conn) do
+  defp open_connection(parent, debug, %{conn: conn} = state) do
     my_pid = self()
     task = Task.async(fn ->
       with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
@@ -428,14 +428,21 @@ defmodule WebSockex do
         {:ok, conn}
       end
     end)
-    open_connection_loop(task)
+    open_connection_loop(parent, debug, Map.put(state, :task, task))
   end
 
-  defp open_connection_loop(%{ref: ref}) do
+  defp open_connection_loop(_parent, _debug, state) do
+    %{task: %{ref: ref}} = state
     receive do
-      {^ref, res} ->
+      {^ref, {:ok, new_conn}} ->
         Process.demonitor(ref, [:flush])
-        res
+        new_state = Map.delete(state, :task)
+                    |> Map.put(:conn, new_conn)
+        {:ok, new_state}
+      {^ref, {:error, reason}} ->
+        Process.demonitor(ref, [:flush])
+        new_state = Map.delete(state, :task)
+        {:error, reason, new_state}
     end
   end
 
