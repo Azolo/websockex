@@ -946,4 +946,12 @@ defmodule WebSockexTest do
 
     assert_receive :lemon
   end
+
+  test "system_get_state only returns module_state", context do
+    get_state = :sys.get_state(context.pid)
+
+    WebSockex.cast(context.pid, {:get_state, self()})
+
+    assert_receive ^get_state
+  end
 end
