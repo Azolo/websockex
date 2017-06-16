@@ -351,8 +351,8 @@ defmodule WebSockex do
   end
 
   @doc false
-  def system_get_state(state) do
-    {:ok, state}
+  def system_get_state(%{module_state: module_state}) do
+    {:ok, module_state}
   end
 
   @doc false
