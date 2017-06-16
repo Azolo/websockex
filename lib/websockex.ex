@@ -352,13 +352,13 @@ defmodule WebSockex do
 
   @doc false
   def system_get_state(state) do
-    {:ok, state, state}
+    {:ok, state}
   end
 
   @doc false
   def system_replace_state(fun, state) do
-    new_state = fun.(state)
-    {:ok, new_state, new_state}
+    new_module_state = fun.(state.module_state)
+    {:ok, new_module_state, %{state | module_state: new_module_state}}
   end
 
   @doc false

@@ -927,6 +927,8 @@ defmodule WebSockexTest do
     end
   end
 
+  ## OTP Stuffs (That I know how to test)
+
   describe "OTP Compliance" do
     test "requires the child to exit when receiving a parent exit signal", context do
       Process.flag(:trap_exit, true)
@@ -936,5 +938,12 @@ defmodule WebSockexTest do
 
       assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
     end
+  end
+
+  test "system_replace_state only replaces module_state", context do
+    :sys.replace_state(context.pid, fn(_) -> :lemon end)
+    WebSockex.cast(context.pid, {:get_state, self()})
+
+    assert_receive :lemon
   end
 end
