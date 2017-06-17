@@ -456,6 +456,14 @@ defmodule WebSockex do
       {:system, from, req} ->
         state = Map.put(state, :connection_status, :connecting)
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+      {:EXIT, ^parent, reason} ->
+        case state do
+          %{reply_fun: reply_fun} ->
+            reply_fun.(reason)
+            exit(reason)
+          _ ->
+            terminate(reason, parent, debug, state)
+        end
       {^ref, {:ok, new_conn}} ->
         Process.demonitor(ref, [:flush])
         new_state = Map.delete(state, :task)

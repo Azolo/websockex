@@ -939,6 +939,46 @@ defmodule WebSockexTest do
       assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
     end
 
+    test "exits with a parent exit signal while connecting", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+
+      WebSockex.cast(pid, {:set_attr, :reconnect, true})
+      TestClient.catch_attr(pid, :terminate, self())
+      send(context.server_pid, :connection_wait)
+      send(context.server_pid, :close)
+
+      _new_server_pid = WebSockex.TestServer.receive_socket_pid
+
+      {:data, data} = elem(:sys.get_status(pid), 3)
+                      |> List.flatten
+                      |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", :connecting} in data
+
+      send(pid, {:EXIT, self(), "OTP Compliance Test"})
+      assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
+      assert_received :terminate
+    end
+
+    test "a parent exit signal doesn't call terminate on initial connect", context do
+      Process.flag(:trap_exit, true)
+      send(context.server_pid, :connection_wait)
+
+      {:ok, pid} = TestClient.start_link(context.url,
+                                         %{catch_terminate: self()},
+                                         async: true)
+
+      {:data, data} = elem(:sys.get_status(pid), 3)
+                      |> List.flatten
+                      |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", :connecting} in data
+
+      send(pid, {:EXIT, self(), "OTP Compliance Test"})
+      assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
+      refute_received :terminate
+    end
+
     test "can send system messages while connecting", context do
       send(context.server_pid, :connection_wait)
 
