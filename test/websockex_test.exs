@@ -938,6 +938,31 @@ defmodule WebSockexTest do
 
       assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
     end
+
+    test "can send system messages while connecting", context do
+      send(context.server_pid, :connection_wait)
+
+      {:ok, pid} = WebSockex.start_link(context.url, BareClient, [], async: true)
+
+      {:data, data} = elem(:sys.get_status(pid), 3)
+                      |> List.flatten
+                      |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", :connecting} in data
+
+      new_server_pid = WebSockex.TestServer.receive_socket_pid()
+      send(new_server_pid, :connection_continue)
+      ^new_server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      send(new_server_pid, :send_ping)
+      assert_receive :received_pong
+
+      {:data, data} = elem(:sys.get_status(pid), 3)
+                      |> List.flatten
+                      |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", :connected} in data
+    end
   end
 
   test ":sys.replace_state only replaces module_state", context do
@@ -960,6 +985,6 @@ defmodule WebSockexTest do
                     |> List.flatten
                     |> List.keyfind(:data, 0)
 
-    assert {"Connection Status", "Connected"} in data
+    assert {"Connection Status", :connected} in data
   end
 end

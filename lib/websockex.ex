@@ -324,7 +324,9 @@ defmodule WebSockex do
     state = %{conn: conn,
               module: module,
               module_state: module_state,
-              reply_fun: reply_fun}
+              reply_fun: reply_fun,
+              buffer: <<>>,
+              fragment: nil}
 
     handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
 
@@ -341,8 +343,11 @@ defmodule WebSockex do
   ## OTP Stuffs
 
   @doc false
-  def system_continue(parent, debug, state) do
-    websocket_loop(parent, debug, state)
+  def system_continue(parent, debug, %{connection_status: :connected} = state) do
+    websocket_loop(parent, debug, Map.delete(state, :connection_status))
+  end
+  def system_continue(parent, debug, %{connection_status: :connecting} = state) do
+    open_connection_loop(parent, debug, Map.delete(state, :connection_status))
   end
 
   @doc false
@@ -380,7 +385,7 @@ defmodule WebSockex do
      data: [{"Status", sys_state},
             {"Parent", parent},
             {"Log", log},
-            {"Connection Status", "Connected"},
+            {"Connection Status", state.connection_status},
             {"Socket Buffer", state.buffer},
             {"Socket Module", state.module},
             {"State", state.module_state}]]
@@ -445,9 +450,12 @@ defmodule WebSockex do
     open_connection_loop(parent, debug, Map.put(state, :task, task))
   end
 
-  defp open_connection_loop(_parent, _debug, state) do
+  defp open_connection_loop(parent, debug, state) do
     %{task: %{ref: ref}} = state
     receive do
+      {:system, from, req} ->
+        state = Map.put(state, :connection_status, :connecting)
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
       {^ref, {:ok, new_conn}} ->
         Process.demonitor(ref, [:flush])
         new_state = Map.delete(state, :task)
@@ -481,6 +489,7 @@ defmodule WebSockex do
         socket = state.conn.socket
         receive do
           {:system, from, req} ->
+            state = Map.put(state, :connection_status, :connected)
             :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
           {:"$websockex_cast", msg} ->
             common_handle({:handle_cast, msg}, parent, debug, state)
@@ -582,8 +591,7 @@ defmodule WebSockex do
     case result do
       {:ok, new_module_state} ->
          state.reply_fun.({:ok, self()})
-         state = Map.merge(state, %{buffer: <<>>,
-                                    fragment: nil,
+         state = Map.merge(state, %{
                                     module_state: new_module_state})
                  |> Map.delete(:reply_fun)
 

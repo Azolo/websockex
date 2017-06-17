@@ -87,20 +87,26 @@ end
 defmodule WebSockex.TestSocket do
   @behaviour :cowboy_websocket_handler
 
-  def init(_, req, [{_, agent_pid}]) do
+  def init(_, req, [{test_pid, agent_pid}]) do
     case Agent.get(agent_pid, fn x -> x end) do
       :ok -> {:upgrade, :protocol, :cowboy_websocket}
       int when is_integer(int) ->
         :cowboy_req.reply(int, req)
         {:shutdown, req, :tests_are_fun}
+      :connection_wait ->
+        send(test_pid, self())
+        receive do
+          :connection_continue ->
+            {:upgrade, :protocol, :cowboy_websocket}
+        end
     end
   end
 
   def terminate(_,_,_), do: :ok
 
-  def websocket_init(_, req, [{pid, agent_pid}]) do
-    send(pid, self())
-    {:ok, req, %{pid: pid, agent_pid: agent_pid}}
+  def websocket_init(_, req, [{test_pid, agent_pid}]) do
+    send(test_pid, self())
+    {:ok, req, %{pid: test_pid, agent_pid: agent_pid}}
   end
 
   def websocket_terminate({:remote, :closed}, _, state) do
@@ -144,6 +150,10 @@ defmodule WebSockex.TestSocket do
   end
   def websocket_info({:set_code, code}, req, state) do
     Agent.update(state.agent_pid, fn _ -> code end)
+    {:ok, req, state}
+  end
+  def websocket_info(:connection_wait, req, state) do
+    Agent.update(state.agent_pid, fn _ -> :connection_wait end)
     {:ok, req, state}
   end
   def websocket_info(:shutdown, req, state) do
