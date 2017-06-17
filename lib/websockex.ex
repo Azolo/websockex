@@ -347,7 +347,7 @@ defmodule WebSockex do
     websocket_loop(parent, debug, Map.delete(state, :connection_status))
   end
   def system_continue(parent, debug, %{connection_status: :connecting} = state) do
-    open_connection_loop(parent, debug, Map.delete(state, :connection_status))
+    open_loop(parent, debug, Map.delete(state, :connection_status))
   end
 
   @doc false
@@ -447,10 +447,10 @@ defmodule WebSockex do
         {:ok, conn}
       end
     end)
-    open_connection_loop(parent, debug, Map.put(state, :task, task))
+    open_loop(parent, debug, Map.put(state, :task, task))
   end
 
-  defp open_connection_loop(parent, debug, state) do
+  defp open_loop(parent, debug, state) do
     %{task: %{ref: ref}} = state
     receive do
       {:system, from, req} ->
