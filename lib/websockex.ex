@@ -599,8 +599,7 @@ defmodule WebSockex do
     case result do
       {:ok, new_module_state} ->
          state.reply_fun.({:ok, self()})
-         state = Map.merge(state, %{
-                                    module_state: new_module_state})
+         state = Map.put(state, :module_state, new_module_state)
                  |> Map.delete(:reply_fun)
 
           websocket_loop(parent, debug, state)
