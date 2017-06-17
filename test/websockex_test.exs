@@ -954,4 +954,12 @@ defmodule WebSockexTest do
 
     assert_receive ^get_state
   end
+
+  test ":sys.get_status returns from format_status", context do
+    {:data, data} = elem(:sys.get_status(context.pid), 3)
+                    |> List.flatten
+                    |> List.keyfind(:data, 0)
+
+    assert {"Connection Status", "Connected"} in data
+  end
 end
