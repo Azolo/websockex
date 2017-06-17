@@ -10,6 +10,10 @@
   - `:socket_connect_timeout` - The timeout for opening a TCP connection.
   - `:socket_recv_timeout` - The timeout for receiving a HTTP response header.
 - `start` and `start_link` can now take a `Conn` struct in place of a url.
+- Added the ability to handle system messages while opening a connection.
+- Added the ability to handle parent exit messages while opening a connection.
+- Improve `:sys.get_status`, `:sys.get_state`, `:sys.replace_state` functions.
+  - These are undocumented, but are meant primarly for debugging.
 
 ### Bug Fixes
 - Ensure `terminate/2` callback is called consistently.
