@@ -1003,6 +1003,38 @@ defmodule WebSockexTest do
 
       assert {"Connection Status", :connected} in data
     end
+
+    test "can send system messages while closing", context do
+      send(context.server_pid, :stall)
+      TestClient.catch_attr(context.pid, :terminate, self())
+      WebSockex.cast(context.pid, :close)
+
+      {:data, data} = elem(:sys.get_status(context.pid), 3)
+                      |> List.flatten
+                      |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", {:closing, {:local, :normal}}} in data
+
+      send(context.pid, :"$websockex_close_timeout")
+    end
+
+    test "exits with a parent exit signal while closing", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
+      TestClient.catch_attr(pid, :terminate, self())
+      WebSockex.cast(context.pid, :close)
+
+      send(context.server_pid, :stall)
+
+      {:data, data} = elem(:sys.get_status(pid), 3)
+                      |> List.flatten
+                      |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", {:closing, {:local, :normal}}} in data
+
+      send(pid, {:EXIT, self(), "OTP Compliance Test"})
+      assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
+      assert_received :terminate
+    end
   end
 
   test ":sys.replace_state only replaces module_state", context do

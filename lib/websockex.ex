@@ -349,6 +349,9 @@ defmodule WebSockex do
   def system_continue(parent, debug, %{connection_status: :connecting} = state) do
     open_loop(parent, debug, Map.delete(state, :connection_status))
   end
+  def system_continue(parent, debug, %{connection_status: {:closing, reason}} = state) do
+    close_loop(reason, parent, debug, Map.delete(state, :connection_status))
+  end
 
   @doc false
   def system_terminate(reason, parent, debug, state) do
@@ -732,6 +735,11 @@ defmodule WebSockex do
     transport = state.conn.transport
     socket = state.conn.socket
     receive do
+      {:system, from, req} ->
+        state = Map.put(state, :connection_status, {:closing, reason})
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+      {:EXIT, ^parent, reason} ->
+        terminate(reason, parent, debug, state)
       {^transport, ^socket, _} ->
         close_loop(reason, parent, debug, state)
       {:tcp_closed, ^socket} ->

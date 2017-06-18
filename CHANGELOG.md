@@ -1,3 +1,7 @@
+## Unreleased
+### Enhancements
+- Handle system messages and parent exits while closing the connection.
+
 ## 0.3.0
 ### Breaking Changes
 - The parameters for the `handle_connect/2` callback have been reversed. The
