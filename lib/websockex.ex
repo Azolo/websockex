@@ -396,6 +396,212 @@ defmodule WebSockex do
 
   # Internals! Yay
 
+  # Loops
+
+  defp open_loop(parent, debug, state) do
+    %{task: %{ref: ref}} = state
+    receive do
+      {:system, from, req} ->
+        state = Map.put(state, :connection_status, :connecting)
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+      {:EXIT, ^parent, reason} ->
+        case state do
+          %{reply_fun: reply_fun} ->
+            reply_fun.(reason)
+            exit(reason)
+          _ ->
+            terminate(reason, parent, debug, state)
+        end
+      {^ref, {:ok, new_conn}} ->
+        Process.demonitor(ref, [:flush])
+        new_state = Map.delete(state, :task)
+                    |> Map.put(:conn, new_conn)
+        {:ok, new_state}
+      {^ref, {:error, reason}} ->
+        Process.demonitor(ref, [:flush])
+        new_state = Map.delete(state, :task)
+        {:error, reason, new_state}
+    end
+  end
+
+  defp websocket_loop(parent, debug, state) do
+    case WebSockex.Frame.parse_frame(state.buffer) do
+      {:ok, frame, buffer} ->
+        handle_frame(frame, parent, debug, %{state | buffer: buffer})
+      :incomplete ->
+        transport = state.conn.transport
+        socket = state.conn.socket
+        receive do
+          {:system, from, req} ->
+            state = Map.put(state, :connection_status, :connected)
+            :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+          {:"$websockex_cast", msg} ->
+            common_handle({:handle_cast, msg}, parent, debug, state)
+          {:"$websockex_send", binary_frame} ->
+            handle_send(binary_frame, parent, debug, state)
+          {^transport, ^socket, message} ->
+            buffer = <<state.buffer::bitstring, message::bitstring>>
+            websocket_loop(parent, debug, %{state | buffer: buffer})
+          {:tcp_closed, ^socket} ->
+            handle_close({:remote, :closed}, parent, debug, state)
+          :"websockex_close_timeout" ->
+            websocket_loop(parent, debug, state)
+          {:EXIT, ^parent, reason} ->
+            terminate(reason, parent, debug, state)
+          msg ->
+            common_handle({:handle_info, msg}, parent, debug, state)
+        end
+    end
+  end
+
+  defp close_loop(reason, parent, debug, %{conn: conn} = state) do
+    transport = state.conn.transport
+    socket = state.conn.socket
+    receive do
+      {:system, from, req} ->
+        state = Map.put(state, :connection_status, {:closing, reason})
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+      {:EXIT, ^parent, reason} ->
+        terminate(reason, parent, debug, state)
+      {^transport, ^socket, _} ->
+        close_loop(reason, parent, debug, state)
+      {:tcp_closed, ^socket} ->
+        new_conn = %{conn | socket: nil}
+        on_disconnect(reason, parent, debug, %{state | conn: new_conn})
+      :"$websockex_close_timeout" ->
+        new_conn = WebSockex.Conn.close_socket(conn)
+        on_disconnect(reason, parent, debug, %{state | conn: new_conn})
+    end
+  end
+
+  # Frame Handling
+
+  defp handle_frame(:ping, parent, debug, state) do
+    common_handle({:handle_ping, :ping}, parent, debug, state)
+  end
+  defp handle_frame({:ping, msg}, parent, debug, state) do
+    common_handle({:handle_ping, {:ping, msg}}, parent, debug, state)
+  end
+  defp handle_frame(:pong, parent, debug, state) do
+    common_handle({:handle_pong, :pong}, parent, debug, state)
+  end
+  defp handle_frame({:pong, msg}, parent, debug, state) do
+    common_handle({:handle_pong, {:pong, msg}}, parent, debug, state)
+  end
+  defp handle_frame(:close, parent, debug, state) do
+    handle_close({:remote, :normal}, parent, debug, state)
+  end
+  defp handle_frame({:close, code, reason}, parent, debug, state) do
+    handle_close({:remote, code, reason}, parent, debug, state)
+  end
+  defp handle_frame({:fragment, _, _} = fragment, parent, debug, state) do
+    handle_fragment(fragment, parent, debug, state)
+  end
+  defp handle_frame({:continuation, _} = fragment, parent, debug, state) do
+    handle_fragment(fragment, parent, debug, state)
+  end
+  defp handle_frame({:finish, _} = fragment, parent, debug, state) do
+    handle_fragment(fragment, parent, debug, state)
+  end
+  defp handle_frame(frame, parent, debug, state) do
+    common_handle({:handle_frame, frame}, parent, debug, state)
+  end
+
+  defp handle_fragment({:fragment, type, part}, parent, debug, %{fragment: nil} = state) do
+    websocket_loop(parent, debug, %{state | fragment: {type, part}})
+  end
+  defp handle_fragment({:fragment, _, _}, parent, debug, state) do
+    handle_close({:local, 1002, "Endpoint tried to start a fragment without finishing another"}, parent, debug, state)
+  end
+  defp handle_fragment({:continuation, _}, parent, debug, %{fragment: nil} = state) do
+    handle_close({:local, 1002, "Endpoint sent a continuation frame without starting a fragment"}, parent, debug, state)
+  end
+  defp handle_fragment({:continuation, next}, parent, debug, %{fragment: {type, part}} = state) do
+    websocket_loop(parent, debug, %{state | fragment: {type, <<part::binary, next::binary>>}})
+  end
+  defp handle_fragment({:finish, next}, parent, debug, %{fragment: {type, part}} = state) do
+    handle_frame({type, <<part::binary, next::binary>>}, parent, debug, %{state | fragment: nil})
+  end
+
+  defp handle_close({:remote, :closed} = reason, parent, debug, state) do
+    new_conn = %{state.conn | socket: nil}
+    on_disconnect(reason, parent, debug, %{state | conn: new_conn})
+  end
+  defp handle_close({:remote, _} = reason, parent, debug, state) do
+    handle_remote_close(reason, parent, debug, state)
+  end
+  defp handle_close({:remote, _, _} = reason, parent, debug, state) do
+    handle_remote_close(reason, parent, debug, state)
+  end
+  defp handle_close({:local, _} = reason, parent, debug, state) do
+    handle_local_close(reason, parent, debug, state)
+  end
+  defp handle_close({:local, _, _} = reason, parent, debug, state) do
+    handle_local_close(reason, parent, debug, state)
+  end
+
+  defp common_handle({function, msg}, parent, debug, state) do
+    result = try_callback(state.module, function, [msg, state.module_state])
+
+    case result do
+      {:ok, new_state} ->
+        websocket_loop(parent, debug, %{state | module_state: new_state})
+      {:reply, frame, new_state} ->
+        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
+             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
+          websocket_loop(parent, debug, %{state | module_state: new_state})
+        else
+          {:error, error} ->
+            raise error
+        end
+      {:close, new_state} ->
+        handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
+      {:close, {close_code, message}, new_state} ->
+        handle_close({:local, close_code, message}, parent, debug, %{state | module_state: new_state})
+      {:"$EXIT", reason} ->
+        terminate(reason, parent, debug, state)
+      badreply ->
+        error = %WebSockex.BadResponseError{module: state.module, function: function,
+          args: [msg, state.module_state], response: badreply}
+        terminate(error, parent, debug, state)
+    end
+  end
+
+  defp handle_remote_close(reason, parent, debug, state) do
+    # If the socket is already closed then that's ok, but the spec says to send
+    # the close frame back in response to receiving it.
+    send_close_frame(reason, state.conn)
+
+    Process.send_after(self(), :"$websockex_close_timeout", 5000)
+    close_loop(reason, parent, debug, state)
+  end
+
+  defp handle_local_close(reason, parent, debug, state) do
+    case send_close_frame(reason, state.conn) do
+      :ok ->
+        Process.send_after(self(), :"$websockex_close_timeout", 5000)
+        close_loop(reason, parent, debug, state)
+      {:error, %WebSockex.ConnError{original: :closed}} ->
+        close_loop({:remote, :closed}, parent, debug, state)
+    end
+  end
+
+  # Frame Sending
+
+  defp send_close_frame(reason, conn) do
+    with {:ok, binary_frame} <- build_close_frame(reason),
+    do: WebSockex.Conn.socket_send(conn, binary_frame)
+  end
+
+  defp build_close_frame({_, :normal}) do
+    WebSockex.Frame.encode_frame(:close)
+  end
+  defp build_close_frame({_, code, msg}) do
+    WebSockex.Frame.encode_frame({:close, code, msg})
+  end
+
+  # Connection Handling
+
   defp on_disconnect(reason, parent, debug, state, callbacks \\ [], attempt \\ 1) do
     case handle_disconnect(reason, state, attempt) do
       {:ok, new_module_state} ->
@@ -453,148 +659,7 @@ defmodule WebSockex do
     open_loop(parent, debug, Map.put(state, :task, task))
   end
 
-  defp open_loop(parent, debug, state) do
-    %{task: %{ref: ref}} = state
-    receive do
-      {:system, from, req} ->
-        state = Map.put(state, :connection_status, :connecting)
-        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
-      {:EXIT, ^parent, reason} ->
-        case state do
-          %{reply_fun: reply_fun} ->
-            reply_fun.(reason)
-            exit(reason)
-          _ ->
-            terminate(reason, parent, debug, state)
-        end
-      {^ref, {:ok, new_conn}} ->
-        Process.demonitor(ref, [:flush])
-        new_state = Map.delete(state, :task)
-                    |> Map.put(:conn, new_conn)
-        {:ok, new_state}
-      {^ref, {:error, reason}} ->
-        Process.demonitor(ref, [:flush])
-        new_state = Map.delete(state, :task)
-        {:error, reason, new_state}
-    end
-  end
-
-  defp validate_handshake(headers, key) do
-    challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
-
-    {_, res} = List.keyfind(headers, "Sec-Websocket-Accept", 0)
-
-    if challenge == res do
-      :ok
-    else
-      {:error, %WebSockex.HandshakeError{response: res, challenge: challenge}}
-    end
-  end
-
-  defp websocket_loop(parent, debug, state) do
-    case WebSockex.Frame.parse_frame(state.buffer) do
-      {:ok, frame, buffer} ->
-        handle_frame(frame, parent, debug, %{state | buffer: buffer})
-      :incomplete ->
-        transport = state.conn.transport
-        socket = state.conn.socket
-        receive do
-          {:system, from, req} ->
-            state = Map.put(state, :connection_status, :connected)
-            :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
-          {:"$websockex_cast", msg} ->
-            common_handle({:handle_cast, msg}, parent, debug, state)
-          {:"$websockex_send", binary_frame} ->
-            handle_send(binary_frame, parent, debug, state)
-          {^transport, ^socket, message} ->
-            buffer = <<state.buffer::bitstring, message::bitstring>>
-            websocket_loop(parent, debug, %{state | buffer: buffer})
-          {:tcp_closed, ^socket} ->
-            handle_close({:remote, :closed}, parent, debug, state)
-          :"websockex_close_timeout" ->
-            websocket_loop(parent, debug, state)
-          {:EXIT, ^parent, reason} ->
-            terminate(reason, parent, debug, state)
-          msg ->
-            common_handle({:handle_info, msg}, parent, debug, state)
-        end
-    end
-  end
-
-  defp handle_frame(:ping, parent, debug, state) do
-    common_handle({:handle_ping, :ping}, parent, debug, state)
-  end
-  defp handle_frame({:ping, msg}, parent, debug, state) do
-    common_handle({:handle_ping, {:ping, msg}}, parent, debug, state)
-  end
-  defp handle_frame(:pong, parent, debug, state) do
-    common_handle({:handle_pong, :pong}, parent, debug, state)
-  end
-  defp handle_frame({:pong, msg}, parent, debug, state) do
-    common_handle({:handle_pong, {:pong, msg}}, parent, debug, state)
-  end
-  defp handle_frame(:close, parent, debug, state) do
-    handle_close({:remote, :normal}, parent, debug, state)
-  end
-  defp handle_frame({:close, code, reason}, parent, debug, state) do
-    handle_close({:remote, code, reason}, parent, debug, state)
-  end
-  defp handle_frame({:fragment, _, _} = fragment, parent, debug, state) do
-    handle_fragment(fragment, parent, debug, state)
-  end
-  defp handle_frame({:continuation, _} = fragment, parent, debug, state) do
-    handle_fragment(fragment, parent, debug, state)
-  end
-  defp handle_frame({:finish, _} = fragment, parent, debug, state) do
-    handle_fragment(fragment, parent, debug, state)
-  end
-  defp handle_frame(frame, parent, debug, state) do
-    common_handle({:handle_frame, frame}, parent, debug, state)
-  end
-
-  defp common_handle({function, msg}, parent, debug, state) do
-    result = try_callback(state.module, function, [msg, state.module_state])
-
-    case result do
-      {:ok, new_state} ->
-        websocket_loop(parent, debug, %{state | module_state: new_state})
-      {:reply, frame, new_state} ->
-        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
-             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
-          websocket_loop(parent, debug, %{state | module_state: new_state})
-        else
-          {:error, error} ->
-            raise error
-        end
-      {:close, new_state} ->
-        handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
-      {:close, {close_code, message}, new_state} ->
-        handle_close({:local, close_code, message}, parent, debug, %{state | module_state: new_state})
-      {:"$EXIT", reason} ->
-        terminate(reason, parent, debug, state)
-      badreply ->
-        error = %WebSockex.BadResponseError{module: state.module, function: function,
-          args: [msg, state.module_state], response: badreply}
-        terminate(error, parent, debug, state)
-    end
-  end
-
-  defp handle_close({:remote, :closed} = reason, parent, debug, state) do
-    new_conn = %{state.conn | socket: nil}
-    on_disconnect(reason, parent, debug, %{state | conn: new_conn})
-  end
-  defp handle_close({:remote, _} = reason, parent, debug, state) do
-    handle_remote_close(reason, parent, debug, state)
-  end
-  defp handle_close({:remote, _, _} = reason, parent, debug, state) do
-    handle_remote_close(reason, parent, debug, state)
-  end
-  defp handle_close({:local, _} = reason, parent, debug, state) do
-    handle_local_close(reason, parent, debug, state)
-  end
-  defp handle_close({:local, _, _} = reason, parent, debug, state) do
-    handle_local_close(reason, parent, debug, state)
-  end
+  # Other State Functions
 
   defp module_init(parent, debug, state) do
     result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
@@ -628,50 +693,6 @@ defmodule WebSockex do
     end
   end
 
-  defp handle_send(binary_frame, parent, debug, %{conn: conn} = state) do
-    case WebSockex.Conn.socket_send(conn, binary_frame) do
-      :ok ->
-        websocket_loop(parent, debug, state)
-      {:error, error} ->
-        terminate(error, parent, debug, state)
-    end
-  end
-
-  defp handle_fragment({:fragment, type, part}, parent, debug, %{fragment: nil} = state) do
-    websocket_loop(parent, debug, %{state | fragment: {type, part}})
-  end
-  defp handle_fragment({:fragment, _, _}, parent, debug, state) do
-    handle_close({:local, 1002, "Endpoint tried to start a fragment without finishing another"}, parent, debug, state)
-  end
-  defp handle_fragment({:continuation, _}, parent, debug, %{fragment: nil} = state) do
-    handle_close({:local, 1002, "Endpoint sent a continuation frame without starting a fragment"}, parent, debug, state)
-  end
-  defp handle_fragment({:continuation, next}, parent, debug, %{fragment: {type, part}} = state) do
-    websocket_loop(parent, debug, %{state | fragment: {type, <<part::binary, next::binary>>}})
-  end
-  defp handle_fragment({:finish, next}, parent, debug, %{fragment: {type, part}} = state) do
-    handle_frame({type, <<part::binary, next::binary>>}, parent, debug, %{state | fragment: nil})
-  end
-
-  defp handle_remote_close(reason, parent, debug, state) do
-    # If the socket is already closed then that's ok, but the spec says to send
-    # the close frame back in response to receiving it.
-    send_close_frame(reason, state.conn)
-
-    Process.send_after(self(), :"$websockex_close_timeout", 5000)
-    close_loop(reason, parent, debug, state)
-  end
-
-  defp handle_local_close(reason, parent, debug, state) do
-    case send_close_frame(reason, state.conn) do
-      :ok ->
-        Process.send_after(self(), :"$websockex_close_timeout", 5000)
-        close_loop(reason, parent, debug, state)
-      {:error, %WebSockex.ConnError{original: :closed}} ->
-        close_loop({:remote, :closed}, parent, debug, state)
-    end
-  end
-
   defp handle_disconnect(reason, state, attempt) do
     status_map = %{conn: state.conn,
                    reason: reason,
@@ -695,6 +716,8 @@ defmodule WebSockex do
     end
   end
 
+  # Helpers (aka everything else)
+
   defp try_callback(module, function, args) do
     apply(module, function, args)
   catch
@@ -706,24 +729,13 @@ defmodule WebSockex do
       {:"$EXIT", payload}
   end
 
-  defp send_close_frame(reason, conn) do
-    with {:ok, binary_frame} <- build_close_frame(reason),
-    do: WebSockex.Conn.socket_send(conn, binary_frame)
-  end
-
-  defp build_close_frame({_, :normal}) do
-    WebSockex.Frame.encode_frame(:close)
-  end
-  defp build_close_frame({_, code, msg}) do
-    WebSockex.Frame.encode_frame({:close, code, msg})
-  end
-
   defp init_failure(reason, _parent, _debug, state) do
     state.reply_fun.({:error, reason})
   end
 
   defp async_init_fun({:ok, _}), do: :noop
   defp async_init_fun(exit_reason), do: exit(exit_reason)
+
   defp sync_init_fun(parent, {error, stacktrace}) when is_list(stacktrace) do
     :proc_lib.init_ack(parent, {:error, error})
   end
@@ -731,23 +743,15 @@ defmodule WebSockex do
     :proc_lib.init_ack(parent, reply)
   end
 
-  defp close_loop(reason, parent, debug, %{conn: conn} = state) do
-    transport = state.conn.transport
-    socket = state.conn.socket
-    receive do
-      {:system, from, req} ->
-        state = Map.put(state, :connection_status, {:closing, reason})
-        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
-      {:EXIT, ^parent, reason} ->
-        terminate(reason, parent, debug, state)
-      {^transport, ^socket, _} ->
-        close_loop(reason, parent, debug, state)
-      {:tcp_closed, ^socket} ->
-        new_conn = %{conn | socket: nil}
-        on_disconnect(reason, parent, debug, %{state | conn: new_conn})
-      :"$websockex_close_timeout" ->
-        new_conn = WebSockex.Conn.close_socket(conn)
-        on_disconnect(reason, parent, debug, %{state | conn: new_conn})
+  defp validate_handshake(headers, key) do
+    challenge = :crypto.hash(:sha, key <> @handshake_guid) |> Base.encode64
+
+    {_, res} = List.keyfind(headers, "Sec-Websocket-Accept", 0)
+
+    if challenge == res do
+      :ok
+    else
+      {:error, %WebSockex.HandshakeError{response: res, challenge: challenge}}
     end
   end
 
