@@ -588,6 +588,15 @@ defmodule WebSockex do
 
   # Frame Sending
 
+  defp handle_send(binary_frame, parent, debug, %{conn: conn} = state) do
+    case WebSockex.Conn.socket_send(conn, binary_frame) do
+      :ok ->
+      websocket_loop(parent, debug, state)
+      {:error, error} ->
+      terminate(error, parent, debug, state)
+    end
+  end
+
   defp send_close_frame(reason, conn) do
     with {:ok, binary_frame} <- build_close_frame(reason),
     do: WebSockex.Conn.socket_send(conn, binary_frame)
