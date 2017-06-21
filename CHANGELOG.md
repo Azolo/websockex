@@ -2,6 +2,10 @@
 ### Enhancements
 - Handle system messages and parent exits while closing the connection.
 
+### Bug Fixes
+- SSL frames sent right after connecting will now be handled instead of being
+  left in a dead Task mailbox.
+
 ## 0.3.0
 ### Breaking Changes
 - The parameters for the `handle_connect/2` callback have been reversed. The
