@@ -659,9 +659,9 @@ defmodule WebSockex do
            :ok <- WebSockex.Conn.socket_send(conn, request),
            {:ok, headers} <- WebSockex.Conn.handle_response(conn),
            :ok <- validate_handshake(headers, key),
-           :ok <- WebSockex.Conn.set_active(conn)
+           :ok <- WebSockex.Conn.controlling_process(conn, my_pid)
       do
-        :ok = WebSockex.Conn.controlling_process(conn, my_pid)
+        :ok = WebSockex.Conn.set_active(conn)
         {:ok, conn}
       end
     end)
