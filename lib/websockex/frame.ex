@@ -17,7 +17,7 @@ defmodule WebSockex.Frame do
   @type frame :: :ping | :pong | :close | {:ping, binary} | {:pong, binary} |
                  {:close, close_code, utf8} | {:text, utf8} | {:binary, binary} |
                  {:fragment, :text | :binary, binary} | {:continuation, binary} |
-                 {:fin, binary}
+                 {:finish, binary}
 
   @opcodes %{text: 1,
              binary: 2,

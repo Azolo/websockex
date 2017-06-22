@@ -298,7 +298,7 @@ defmodule WebSockex do
   @doc """
   Queue a frame to be sent asynchronously.
   """
-  @spec send_frame(pid, frame) :: :ok | {:error, WebSockex.FrameEncodeError.t}
+  @spec send_frame(pid, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}}
   def send_frame(pid, frame) do
     with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame) do
       send(pid, {:"$websockex_send", binary_frame})
@@ -354,6 +354,7 @@ defmodule WebSockex do
   end
 
   @doc false
+  @spec system_terminate(term, pid, any, any) :: no_return
   def system_terminate(reason, parent, debug, state) do
     terminate(reason, parent, debug, state)
   end
@@ -772,8 +773,6 @@ defmodule WebSockex do
       when is_nil(port)
       when not protocol in ["ws", "wss"] ->
         {:error, %WebSockex.URLError{url: url}}
-      {:error, error} ->
-        {:error, error}
       %URI{} = uri ->
         {:ok, uri}
     end

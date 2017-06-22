@@ -60,7 +60,7 @@ defmodule WebSockex.Conn do
                          query: String.t | nil,
                          extra_headers: [header],
                          transport: transport,
-                         socket: socket,
+                         socket: socket | nil,
                          socket_connect_timeout: non_neg_integer,
                          socket_recv_timeout: non_neg_integer}
 
@@ -129,7 +129,7 @@ defmodule WebSockex.Conn do
   When the `:socket` field is `nil` in the struct, the function just returns
   the struct as is.
   """
-  @spec close_socket(__MODULE__.t) :: __MODULE__.t
+  @spec close_socket(__MODULE__.t) :: %WebSockex.Conn{socket: nil}
   def close_socket(conn)
   def close_socket(%{socket: nil} = conn), do: conn
   def close_socket(%{socket: socket} = conn) do
