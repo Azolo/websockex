@@ -1076,10 +1076,13 @@ defmodule WebSockexTest do
   end
 
   test ":sys.get_status returns from format_status", context do
-    {:data, data} = elem(:sys.get_status(context.pid), 3)
-                    |> List.flatten
-                    |> List.keyfind(:data, 0)
+    {{:data, data}, rest} = elem(:sys.get_status(context.pid), 3)
+                            |> List.last
+                            |> List.keytake(:data, 0)
 
     assert {"Connection Status", :connected} in data
+
+    # A second data tuple means pretty output for `:observer`. Who knew?
+    assert {:data, _data} = List.keyfind(rest, :data, 0)
   end
 end

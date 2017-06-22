@@ -384,14 +384,14 @@ defmodule WebSockex do
   def format_status(_, [_pdict, sys_state, parent, debug, state]) do
     log = :sys.get_debug(:log, debug, [])
 
-    [header: "Status for WebSockex process #{inspect self()}",
+    [header: 'Status for WebSockex process #{inspect self()}',
      data: [{"Status", sys_state},
             {"Parent", parent},
             {"Log", log},
             {"Connection Status", state.connection_status},
             {"Socket Buffer", state.buffer},
-            {"Socket Module", state.module},
-            {"State", state.module_state}]]
+            {"Socket Module", state.module}],
+     data: [{"State", state.module_state}]]
   end
 
   # Internals! Yay
