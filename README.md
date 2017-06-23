@@ -34,7 +34,7 @@ def deps do
 end
 ```
 
-### With Elixir \< 1.4
+### With Elixir releases prior to version  1.4
 
 Ensure `websockex` is started before your application:
 
