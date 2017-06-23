@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.1
 ### Enhancements
 - Handle system messages and parent exits while closing the connection.
 - The output from `:sys.get_status` didn't look pretty in `:observer` now it
