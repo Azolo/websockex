@@ -25,6 +25,17 @@ defmodule WebSockexTest do
       WebSockex.cast(client, {:set_attr, String.to_atom(attr), receiver})
     end
 
+    def format_status(_opt, [_pdict, %{fail_status: true}]) do
+      raise "Failed Status"
+    end
+    def format_status(_opt, [_pdict, %{non_list_status: true}]) do
+      {:data, "Not a list!"}
+    end
+    def format_status(_opt, [_pdict, %{custom_status: true}]) do
+      [{:data, [{"Lemon", :pies}]}]
+    end
+
+
     def handle_connect(_conn, %{connect_badreply: true}), do: :lemons
     def handle_connect(_conn, %{connect_error: true}), do: raise "Connect Error"
     def handle_connect(_conn, %{connect_exit: true}), do: exit "Connect Exit"
@@ -907,7 +918,60 @@ defmodule WebSockexTest do
 
       assert_receive {:caught_text, "Hello"}
     end
+  end
 
+  describe "format_status callback" do
+    test "is optional", context do
+      import ExUnit.CaptureLog
+      assert function_exported?(BareClient, :format_status, 2) == false
+
+      {:ok, pid} = WebSockex.start_link(context.url, BareClient, :test)
+
+      refute capture_log(fn ->
+        {{:data, data}, _} = elem(:sys.get_status(pid), 3)
+                             |> List.last
+                             |> List.keydelete(:data, 0)
+                             |> List.keytake(:data, 0)
+
+        assert [{"State", _}] = data
+      end) =~ "There was an error while invoking #{__MODULE__}.TestClient.format_status/2"
+    end
+
+    test "is invoked when implemented", context do
+      WebSockex.cast(context.pid, {:set_attr, :custom_status, true})
+
+      {{:data, data}, _} = elem(:sys.get_status(context.pid), 3)
+                           |> List.last
+                           |> List.keydelete(:data, 0)
+                           |> List.keytake(:data, 0)
+
+      assert [{"Lemon", :pies}] = data
+    end
+
+    test "falls back to default on error or exit", context do
+      import ExUnit.CaptureLog
+      WebSockex.cast(context.pid, {:set_attr, :fail_status, true})
+
+      assert capture_log(fn ->
+        {{:data, data}, _} = elem(:sys.get_status(context.pid), 3)
+                             |> List.last
+                             |> List.keydelete(:data, 0)
+                             |> List.keytake(:data, 0)
+
+        assert [{"State", _}] = data
+      end) =~ "There was an error while invoking #{__MODULE__}.TestClient.format_status/2"
+    end
+
+    test "wraps a non-list return", context do
+      WebSockex.cast(context.pid, {:set_attr, :non_list_status, true})
+
+      {{:data, data}, _} = elem(:sys.get_status(context.pid), 3)
+                           |> List.last
+                           |> List.keydelete(:data, 0)
+                           |> List.keytake(:data, 0)
+
+      assert data == "Not a list!"
+    end
   end
 
   test "Won't exit on a request error", context do
@@ -1075,6 +1139,7 @@ defmodule WebSockexTest do
     assert_receive ^get_state
   end
 
+  # Other `format_status` stuff in tested in callback section
   test ":sys.get_status returns from format_status", context do
     {{:data, data}, rest} = elem(:sys.get_status(context.pid), 3)
                             |> List.last

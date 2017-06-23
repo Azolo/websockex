@@ -1,6 +1,9 @@
 ## Unreleased
 ### Enhancements
 - Handle system messages and parent exits while closing the connection.
+- The output from `:sys.get_status` didn't look pretty in `:observer` now it
+  does!
+- `format_status/2` now an optional callback.
 
 ### Bug Fixes
 - SSL frames sent right after connecting will now be handled instead of being

@@ -179,8 +179,18 @@ defmodule WebSockex do
     {:ok, new_state :: term}
     | {:error, reason :: term}
 
-  @optional_callbacks [handle_disconnect: 2, handle_ping: 2, handle_pong: 2, terminate: 2,
-                       code_change: 3]
+  @doc """
+  Invoked to to retrieve a formatted status of the state in a WebSockex process.
+
+  This optional callback is used when you want to edit the values returned when
+  invoking `:sys.get_status`.
+
+  The second argument is a two-element list with the order of `[pdict, state]`.
+  """
+  @callback format_status(:normal, [process_dictionary | state]) :: status :: term
+  when process_dictionary: [{key :: term, val :: term}], state: term
+
+  @optional_callbacks format_status: 2
 
   defmacro __using__(_) do
     quote location: :keep do
@@ -382,17 +392,36 @@ defmodule WebSockex do
   end
 
   @doc false
-  def format_status(_, [_pdict, sys_state, parent, debug, state]) do
+  def format_status(opt, [pdict, sys_state, parent, debug, state]) do
     log = :sys.get_debug(:log, debug, [])
+    module_misc = module_status(opt, state.module, pdict, state.module_state)
 
-    [header: 'Status for WebSockex process #{inspect self()}',
-     data: [{"Status", sys_state},
+    [{:header, 'Status for WebSockex process #{inspect self()}'},
+     {:data, [{"Status", sys_state},
             {"Parent", parent},
             {"Log", log},
             {"Connection Status", state.connection_status},
             {"Socket Buffer", state.buffer},
-            {"Socket Module", state.module}],
-     data: [{"State", state.module_state}]]
+            {"Socket Module", state.module}]} | module_misc]
+  end
+
+  defp module_status(opt, module, pdict, module_state) do
+    default = [{:data, [{"State", module_state}]}]
+
+    if function_exported?(module, :format_status, 2) do
+      result = try_callback(module, :format_status, [opt, [pdict, module_state]])
+
+      case result do
+        {:"$EXIT", _} ->
+          require Logger
+          Logger.error "There was an error while invoking #{module}.format_status/2"
+          default
+        other when is_list(other) -> other
+        other -> [other]
+      end
+    else
+      default
+    end
   end
 
   # Internals! Yay
