@@ -26,7 +26,7 @@ See the `examples/` directory for other examples or take a look at the [document
 
 ## Installation
 
-1. Add `websockex` to your list of dependencies in `mix.exs`:
+Add `websockex` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -34,7 +34,9 @@ def deps do
 end
 ```
 
-2. Ensure `websockex` is started before your application:
+### With Elixir \< 1.4
+
+Ensure `websockex` is started before your application:
 
 ```elixir
 def application do
