@@ -5,6 +5,7 @@
 ### Bug Fixes
 - SSL frames sent right after connecting will now be handled instead of being
   left in a dead Task mailbox.
+- Fixed some places where `dialyzer` told me I had my specs screwed up.
 
 ## 0.3.0
 ### Breaking Changes
