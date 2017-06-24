@@ -577,12 +577,12 @@ defmodule WebSockex do
       {:ok, new_state} ->
         websocket_loop(parent, debug, %{state | module_state: new_state})
       {:reply, frame, new_state} ->
-        with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
-             :ok <- WebSockex.Conn.socket_send(state.conn, binary_frame) do
-          websocket_loop(parent, debug, %{state | module_state: new_state})
-        else
-          {:error, error} ->
-            raise error
+        # A `with` that includes `else` clause isn't tail recursive (elixir-lang/elixir#6251)
+        res = with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
+              do: :ok = WebSockex.Conn.socket_send(state.conn, binary_frame)
+        case res do
+          :ok -> websocket_loop(parent, debug, %{state | module_state: new_state})
+          {:error, error} -> raise error
         end
       {:close, new_state} ->
         handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
