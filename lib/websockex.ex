@@ -344,7 +344,7 @@ defmodule WebSockex do
       {:ok, new_state} ->
         module_init(parent, debug, new_state)
       {:error, error, new_state} when handle_conn_failure == true ->
-        on_disconnect(error, parent, debug, new_state, success: &module_init/3, failure: &init_failure/4)
+        init_conn_failure(error, parent, debug, new_state)
       {:error, error, _} ->
         state.reply_fun.({:error, error})
     end
@@ -641,23 +641,37 @@ defmodule WebSockex do
 
   # Connection Handling
 
-  defp on_disconnect(reason, parent, debug, state, callbacks \\ [], attempt \\ 1) do
+  defp init_conn_failure(reason, parent, debug, state, attempt \\ 1) do
     case handle_disconnect(reason, state, attempt) do
       {:ok, new_module_state} ->
-        callback = Keyword.get(callbacks, :failure, &terminate/4)
-        callback.(reason, parent, debug, %{state | module_state: new_module_state})
+        init_failure(reason, parent, debug, %{state | module_state: new_module_state})
       {:reconnect, new_conn, new_module_state} ->
         state = %{state | conn: new_conn, module_state: new_module_state}
         case open_connection(parent, debug, state) do
           {:ok, new_state} ->
-            callback = Keyword.get(callbacks, :success, &reconnect/3)
-            callback.(parent, debug, new_state)
+            module_init(parent, debug, new_state)
           {:error, new_reason, new_state} ->
-            on_disconnect(new_reason, parent, debug, new_state, callbacks, attempt+1)
+            init_conn_failure(new_reason, parent, debug, new_state, attempt+1)
         end
       {:"$EXIT", reason} ->
-        callback = Keyword.get(callbacks, :failure, &terminate/4)
-        callback.(reason, parent, debug, state)
+        init_failure(reason, parent, debug, state)
+    end
+  end
+
+  defp on_disconnect(reason, parent, debug, state, attempt \\ 1) do
+    case handle_disconnect(reason, state, attempt) do
+      {:ok, new_module_state} ->
+        terminate(reason, parent, debug, %{state | module_state: new_module_state})
+      {:reconnect, new_conn, new_module_state} ->
+        state = %{state | conn: new_conn, module_state: new_module_state}
+        case open_connection(parent, debug, state) do
+          {:ok, new_state} ->
+            reconnect(parent, debug, new_state)
+          {:error, new_reason, new_state} ->
+            on_disconnect(new_reason, parent, debug, new_state, attempt+1)
+        end
+      {:"$EXIT", reason} ->
+       terminate(reason, parent, debug, state)
     end
   end
 
