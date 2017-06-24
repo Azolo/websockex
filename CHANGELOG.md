@@ -1,3 +1,8 @@
+## Unreleased
+### Bug Fixes
+- Fix a couple of places where the call stack wasn't being properly tail-call
+  optimized.
+
 ## 0.3.1
 ### Enhancements
 - Handle system messages and parent exits while closing the connection.
