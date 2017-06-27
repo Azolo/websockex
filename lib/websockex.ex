@@ -631,6 +631,7 @@ defmodule WebSockex do
     close_loop(reason, parent, debug, state)
   end
 
+  @spec handle_terminate_close(any, pid, any, any) :: no_return
   def handle_terminate_close(reason, parent, debug, state) do
     send_close_frame(:error,  state.conn)
 
@@ -763,6 +764,7 @@ defmodule WebSockex do
     end
   end
 
+  @spec terminate(any, pid, any, any) :: no_return
   defp terminate(reason, parent, debug, %{conn: %{socket: socket}} = state)
   when not is_nil(socket) do
     handle_terminate_close(reason, parent, debug, state)
