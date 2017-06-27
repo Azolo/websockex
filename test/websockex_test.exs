@@ -20,6 +20,7 @@ defmodule WebSockexTest do
       WebSockex.start_link(url, __MODULE__, state, opts)
     end
 
+    def catch_attr(client, atom), do: catch_attr(client, atom, self())
     def catch_attr(client, atom, receiver) do
       attr = "catch_" <> Atom.to_string(atom)
       WebSockex.cast(client, {:set_attr, String.to_atom(attr), receiver})
@@ -35,6 +36,15 @@ defmodule WebSockexTest do
       [{:data, [{"Lemon", :pies}]}]
     end
 
+    def get_conn(pid) do
+      WebSockex.cast(pid, {:send_conn, self()})
+
+      receive do
+        conn = %WebSockex.Conn{} -> conn
+      after
+        500 -> raise "Didn't receive a Conn"
+      end
+    end
 
     def handle_connect(_conn, %{connect_badreply: true}), do: :lemons
     def handle_connect(_conn, %{connect_error: true}), do: raise "Connect Error"
@@ -428,6 +438,24 @@ defmodule WebSockexTest do
     assert WebSockex.send_frame(context.pid, :ping) == :ok
 
     assert_receive :caught_pong
+  end
+
+  test "send_frame with error", context do
+    Process.flag(:trap_exit, true)
+
+    TestClient.catch_attr(context.pid, :disconnect)
+
+    conn = TestClient.get_conn(context.pid)
+    # Really glad that I got those sys behaviors now
+    :sys.suspend(context.pid)
+
+    WebSockex.send_frame(context.pid, {:text, "hello"})
+    :gen_tcp.shutdown(conn.socket, :write)
+
+    :sys.resume(context.pid)
+
+    assert_receive :caught_disconnect
+    assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
   end
 
   describe "handle_cast callback" do

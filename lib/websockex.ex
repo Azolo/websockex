@@ -647,7 +647,7 @@ defmodule WebSockex do
       :ok ->
         websocket_loop(parent, debug, state)
       {:error, error} ->
-        handle_close(error, parent, debug, state)
+        handle_close({:error, error}, parent, debug, state)
     end
   end
 
