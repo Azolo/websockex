@@ -1,4 +1,11 @@
 ## Unreleased
+### Enhancements
+- Added an `InvalidFrameError` for frames unrecognized by `Frame.encode_frame`.
+- Go through the disconnect cycle when there's an error while with the
+  `{:reply, frame, state}` callback response.
+- Send a close frame with the close code `1011` when there is an unexpected
+  error. (Like an `Exception` in the middle of a callback)
+
 ### Bug Fixes
 - Fix a couple of places where the call stack wasn't being properly tail-call
   optimized.

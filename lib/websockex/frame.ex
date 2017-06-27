@@ -275,6 +275,7 @@ defmodule WebSockex.Frame do
       {:ok, <<unquote(fin_bit)::1, 0::3, 0::4, 1::1, payload_len_bin::bits-size(payload_len_size), mask::bytes-size(4), masked_payload::binary>>}
     end
   end
+  def encode_frame(frame), do: {:error, %WebSockex.InvalidFrameError{frame: frame}}
 
   defp parse_text_payload(len, remaining, buffer) do
     <<payload::bytes-size(len), rest::bitstring>> = remaining

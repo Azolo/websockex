@@ -84,6 +84,9 @@ defmodule WebSockexTest do
     def handle_cast(:test_reconnect, state) do
       {:close, {4985, "Testing Reconnect"}, state}
     end
+    def handle_cast(:bad_frame, state) do
+      {:reply, {:haha, "No"}, state}
+    end
     def handle_cast(:bad_reply, _), do: :lemon_pie
     def handle_cast(:error, _), do: raise "Cast Error"
     def handle_cast(:exit, _), do: exit "Cast Exit"
@@ -173,6 +176,10 @@ defmodule WebSockexTest do
     end
     def handle_disconnect(%{reason: {_, code, reason}}, %{catch_disconnect: pid} = state) do
       send(pid, {:caught_disconnect, code, reason})
+      {:ok, state}
+    end
+    def handle_disconnect(_, %{catch_disconnect: pid} = state) do
+      send(pid, :caught_disconnect)
       {:ok, state}
     end
     def handle_disconnect(_, state), do: {:ok, state}
@@ -450,6 +457,15 @@ defmodule WebSockexTest do
       assert_receive {:EXIT, _, {:local, 4012, "Test Close"}}
       assert_receive {4012, "Test Close"}
     end
+
+    test "handles errors while replying properly", context do
+      Process.flag(:trap_exit, true)
+      TestClient.catch_attr(context.pid, :disconnect, self())
+      WebSockex.cast(context.pid, :bad_frame)
+
+      assert_receive {1011, ""}
+      assert_receive {:EXIT, _, %WebSockex.InvalidFrameError{}}
+    end
   end
 
   describe "handle_connect callback" do
@@ -525,6 +541,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send(pid, :bad_reply)
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
       assert_received :terminate
     end
@@ -533,6 +550,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send(pid, :error)
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Info Error"}, _}}
       assert_received :terminate
     end
@@ -541,6 +559,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send(pid, :exit)
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Info Exit"}
       assert_received :terminate
     end
@@ -549,6 +568,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       WebSockex.cast(pid, :bad_reply)
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
       assert_received :terminate
     end
@@ -557,6 +577,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       WebSockex.cast(pid, :error)
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Cast Error"}, _}}
       assert_received :terminate
     end
@@ -565,6 +586,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       WebSockex.cast(pid, :exit)
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Cast Exit"}
       assert_received :terminate
     end
@@ -573,6 +595,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:text, "Bad Reply"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
       assert_received :terminate
     end
@@ -581,6 +604,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:text, "Error"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Frame Error"}, _}}
       assert_received :terminate
     end
@@ -589,6 +613,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:text, "Exit"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Frame Exit"}
       assert_received :terminate
     end
@@ -597,7 +622,8 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:ping, "Bad Reply"}}
 
-      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
+      assert_receive {1011, ""}
+      assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}, 500
       assert_received :terminate
     end
 
@@ -605,6 +631,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:ping, "Error"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Ping Error"}, _}}
       assert_received :terminate
     end
@@ -613,6 +640,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:ping, "Exit"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Ping Exit"}
       assert_received :terminate
     end
@@ -621,6 +649,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:pong, "Bad Reply"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
       assert_received :terminate
     end
@@ -629,6 +658,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:pong, "Error"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Pong Error"}, _}}
       assert_received :terminate
     end
@@ -637,6 +667,7 @@ defmodule WebSockexTest do
       Process.flag(:trap_exit, true)
       send context.server_pid, {:send, {:pong, "Exit"}}
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Pong Exit"}
       assert_received :terminate
     end
@@ -1023,6 +1054,7 @@ defmodule WebSockexTest do
 
       send(pid, {:EXIT, self(), "OTP Compliance Test"})
 
+      assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
     end
 

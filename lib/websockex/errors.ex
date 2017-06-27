@@ -79,6 +79,14 @@ defmodule WebSockex.FrameEncodeError do
   end
 end
 
+defmodule WebSockex.InvalidFrameError do
+  defexception [:frame]
+
+  def message(%__MODULE__{frame: frame}) do
+    "The following frame is an invalid frame: #{inspect frame}"
+  end
+end
+
 defmodule WebSockex.FragmentParseError do
   defexception [:reason, :fragment, :continuation]
 
