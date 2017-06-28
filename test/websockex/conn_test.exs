@@ -18,9 +18,9 @@ defmodule WebSockex.ConnTest do
   test "new" do
     regular_uri = URI.parse("ws://localhost/ws")
     assert WebSockex.Conn.new(regular_uri,
-                               extra_headers: [{"Pineapple", "Cake"}, ],
-                               socket_connect_timeout: 123,
-                               socket_recv_timeout: 456) ==
+                              extra_headers: [{"Pineapple", "Cake"}],
+                              socket_connect_timeout: 123,
+                              socket_recv_timeout: 456) ==
       %WebSockex.Conn{host: "localhost",
                       port: 80,
                       path: "/ws",
@@ -40,6 +40,43 @@ defmodule WebSockex.ConnTest do
                       query: nil,
                       conn_mod: :ssl,
                       transport: :ssl,
+                      extra_headers: [{"Pineapple", "Cake"}],
+                      socket: nil,
+                      socket_connect_timeout: 6000,
+                      socket_recv_timeout: 5000}
+
+    http_uri = URI.parse("http://localhost/ws")
+    assert WebSockex.Conn.new(http_uri,
+                              extra_headers: [{"Pineapple", "Cake"}]) ==
+      %WebSockex.Conn{host: "localhost",
+                      port: 80,
+                      path: "/ws",
+                      query: nil,
+                      conn_mod: :gen_tcp,
+                      transport: :tcp,
+                      extra_headers: [{"Pineapple", "Cake"}],
+                      socket: nil}
+
+    https_uri = URI.parse("https://localhost/ws")
+    assert WebSockex.Conn.new(https_uri, extra_headers: [{"Pineapple", "Cake"}]) ==
+      %WebSockex.Conn{host: "localhost",
+                      port: 443,
+                      path: "/ws",
+                      query: nil,
+                      conn_mod: :ssl,
+                      transport: :ssl,
+                      extra_headers: [{"Pineapple", "Cake"}],
+                      socket: nil,
+                      socket_connect_timeout: 6000,
+                      socket_recv_timeout: 5000}
+
+    llama = URI.parse("llama://localhost/ws")
+    assert WebSockex.Conn.new(llama, extra_headers: [{"Pineapple", "Cake"}]) == %WebSockex.Conn{host: "localhost",
+                      port: nil,
+                      path: "/ws",
+                      query: nil,
+                      conn_mod: nil,
+                      transport: nil,
                       extra_headers: [{"Pineapple", "Cake"}],
                       socket: nil,
                       socket_connect_timeout: 6000,

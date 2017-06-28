@@ -200,9 +200,13 @@ defmodule WebSockex.Conn do
 
   defp transport(:gen_tcp), do: :tcp
   defp transport(:ssl), do: :ssl
+  defp transport(_), do: nil
 
   defp conn_module("ws"), do: :gen_tcp
+  defp conn_module("http"), do: :gen_tcp
   defp conn_module("wss"), do: :ssl
+  defp conn_module("https"), do: :ssl
+  defp conn_module(_), do: nil
 
   defp wait_for_response(conn, buffer \\ "") do
     case Regex.match?(~r/\r\n\r\n/, buffer) do
