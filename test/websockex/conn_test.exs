@@ -16,62 +16,51 @@ defmodule WebSockex.ConnTest do
   end
 
   test "new" do
+    tcp_conn = %WebSockex.Conn{
+      host: "localhost",
+      port: 80,
+      path: "/ws",
+      query: nil,
+      conn_mod: :gen_tcp,
+      transport: :tcp,
+      extra_headers: [{"Pineapple", "Cake"}],
+      socket: nil,
+      socket_connect_timeout: 6000,
+      socket_recv_timeout: 5000}
+
+    ssl_conn = %WebSockex.Conn{
+      host: "localhost",
+      port: 443,
+      path: "/ws",
+      query: nil,
+      conn_mod: :ssl,
+      transport: :ssl,
+      extra_headers: [{"Pineapple", "Cake"}],
+      socket: nil,
+      socket_connect_timeout: 6000,
+      socket_recv_timeout: 5000}
+
     regular_uri = URI.parse("ws://localhost/ws")
     assert WebSockex.Conn.new(regular_uri,
                               extra_headers: [{"Pineapple", "Cake"}],
                               socket_connect_timeout: 123,
                               socket_recv_timeout: 456) ==
-      %WebSockex.Conn{host: "localhost",
-                      port: 80,
-                      path: "/ws",
-                      query: nil,
-                      conn_mod: :gen_tcp,
-                      transport: :tcp,
-                      extra_headers: [{"Pineapple", "Cake"}],
-                      socket: nil,
-                      socket_connect_timeout: 123,
-                      socket_recv_timeout: 456}
+      %{tcp_conn | socket_connect_timeout: 123, socket_recv_timeout: 456}
 
     ssl_uri = URI.parse("wss://localhost/ws")
-    assert WebSockex.Conn.new(ssl_uri, extra_headers: [{"Pineapple", "Cake"}]) ==
-      %WebSockex.Conn{host: "localhost",
-                      port: 443,
-                      path: "/ws",
-                      query: nil,
-                      conn_mod: :ssl,
-                      transport: :ssl,
-                      extra_headers: [{"Pineapple", "Cake"}],
-                      socket: nil,
-                      socket_connect_timeout: 6000,
-                      socket_recv_timeout: 5000}
+    assert WebSockex.Conn.new(ssl_uri, extra_headers: [{"Pineapple", "Cake"}]) == ssl_conn
 
     http_uri = URI.parse("http://localhost/ws")
-    assert WebSockex.Conn.new(http_uri,
-                              extra_headers: [{"Pineapple", "Cake"}]) ==
-      %WebSockex.Conn{host: "localhost",
-                      port: 80,
-                      path: "/ws",
-                      query: nil,
-                      conn_mod: :gen_tcp,
-                      transport: :tcp,
-                      extra_headers: [{"Pineapple", "Cake"}],
-                      socket: nil}
+    assert WebSockex.Conn.new(http_uri, extra_headers: [{"Pineapple", "Cake"}]) == tcp_conn
+
 
     https_uri = URI.parse("https://localhost/ws")
-    assert WebSockex.Conn.new(https_uri, extra_headers: [{"Pineapple", "Cake"}]) ==
-      %WebSockex.Conn{host: "localhost",
-                      port: 443,
-                      path: "/ws",
-                      query: nil,
-                      conn_mod: :ssl,
-                      transport: :ssl,
-                      extra_headers: [{"Pineapple", "Cake"}],
-                      socket: nil,
-                      socket_connect_timeout: 6000,
-                      socket_recv_timeout: 5000}
+    assert WebSockex.Conn.new(https_uri, extra_headers: [{"Pineapple", "Cake"}]) == ssl_conn
+
 
     llama = URI.parse("llama://localhost/ws")
-    assert WebSockex.Conn.new(llama, extra_headers: [{"Pineapple", "Cake"}]) == %WebSockex.Conn{host: "localhost",
+    assert WebSockex.Conn.new(llama, extra_headers: [{"Pineapple", "Cake"}]) ==
+      %WebSockex.Conn{host: "localhost",
                       port: nil,
                       path: "/ws",
                       query: nil,
