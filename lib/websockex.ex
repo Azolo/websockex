@@ -312,11 +312,15 @@ defmodule WebSockex do
   Queue a frame to be sent asynchronously.
   """
   @spec send_frame(pid, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
+                                                 | %WebSockex.ConnError{}
                                                  | %WebSockex.InvalidFrameError{}}
   def send_frame(pid, frame) do
-    with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame) do
-      send(pid, {:"$websockex_send", binary_frame})
-      :ok
+    try do
+      {:ok, res} = :gen.call(pid, :"$websockex_send", frame)
+      res
+    catch
+      _, reason ->
+        exit({reason, {__MODULE__, :call, [pid, frame]}})
     end
   end
 
@@ -471,8 +475,8 @@ defmodule WebSockex do
             :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
           {:"$websockex_cast", msg} ->
             common_handle({:handle_cast, msg}, parent, debug, state)
-          {:"$websockex_send", binary_frame} ->
-            handle_send(binary_frame, parent, debug, state)
+          {:"$websockex_send", from, frame} ->
+            sync_send(frame, from, parent, debug, state)
           {^transport, ^socket, message} ->
             buffer = <<state.buffer::bitstring, message::bitstring>>
             websocket_loop(parent, debug, %{state | buffer: buffer})
@@ -643,12 +647,20 @@ defmodule WebSockex do
 
   # Frame Sending
 
-  defp handle_send(binary_frame, parent, debug, %{conn: conn} = state) do
-    case WebSockex.Conn.socket_send(conn, binary_frame) do
+  defp sync_send(frame, from, parent, debug, %{conn: conn} = state) do
+    res = with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
+          do: WebSockex.Conn.socket_send(conn, binary_frame)
+
+    case res do
       :ok ->
+        :gen.reply(from, :ok)
         websocket_loop(parent, debug, state)
-      {:error, error} ->
-        handle_close({:error, error}, parent, debug, state)
+      {:error, %WebSockex.ConnError{}} = error ->
+        :gen.reply(from, error)
+        handle_close(error, parent, debug, state)
+      {:error, _} = error ->
+        :gen.reply(from, error)
+        websocket_loop(parent, debug, state)
     end
   end
 

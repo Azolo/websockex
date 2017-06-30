@@ -440,22 +440,28 @@ defmodule WebSockexTest do
     assert_receive :caught_pong
   end
 
-  test "send_frame with error", context do
+  test "send_frame with error", %{pid: pid} do
     Process.flag(:trap_exit, true)
 
-    TestClient.catch_attr(context.pid, :disconnect)
+    TestClient.catch_attr(pid, :disconnect)
 
-    conn = TestClient.get_conn(context.pid)
+    conn = TestClient.get_conn(pid)
     # Really glad that I got those sys behaviors now
-    :sys.suspend(context.pid)
+    :sys.suspend(pid)
 
-    WebSockex.send_frame(context.pid, {:text, "hello"})
     :gen_tcp.shutdown(conn.socket, :write)
+    task = Task.async(fn ->
+      WebSockex.send_frame(pid, {:text, "hello"})
+    end)
 
-    :sys.resume(context.pid)
+    :sys.resume(pid)
 
+    assert Task.await(task) == {:error, %WebSockex.ConnError{original: :closed}}
+
+    %{pid: task_pid} = task
+    assert_receive {:EXIT, ^task_pid, :normal}
     assert_receive :caught_disconnect
-    assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+    assert_receive {:EXIT, ^pid, %WebSockex.ConnError{original: :closed}}
   end
 
   describe "handle_cast callback" do
