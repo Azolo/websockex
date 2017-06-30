@@ -509,6 +509,7 @@ defmodule WebSockex do
         close_loop(reason, parent, debug, state)
       {:"$websockex_send", from, _frame} ->
         :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :closing}})
+        close_loop(reason, parent, debug, state)
       {:tcp_closed, ^socket} ->
         new_conn = %{conn | socket: nil}
         on_disconnect(reason, parent, debug, %{state | conn: new_conn})

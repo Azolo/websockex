@@ -481,13 +481,15 @@ defmodule WebSockexTest do
         {:error, %WebSockex.NotConnectedError{connection_state: :opening}}
     end
 
-    test "returns an error while closing", context do
+    test "returns an error while closing", %{pid: pid} = context do
+      Process.flag(:trap_exit, true)
       send(context.server_pid, :stall)
 
-      WebSockex.cast(context.pid, :close)
+      WebSockex.cast(pid, :close)
 
-      assert WebSockex.send_frame(context.pid, {:text, "Test"}) ==
+      assert WebSockex.send_frame(pid, {:text, "Test"}) ==
         {:error, %WebSockex.NotConnectedError{connection_state: :closing}}
+      refute_receive {:EXIT, ^pid, _}
     end
   end
 
