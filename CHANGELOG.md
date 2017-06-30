@@ -1,5 +1,7 @@
 ## Unreleased
 ### Enhancements
+- `send_frame/2` is now synchronous and returns an error when connection is
+  opening or closing.
 - Rework `Conn.new` to accept other protocols.
 - Added an `InvalidFrameError` for frames unrecognized by `Frame.encode_frame`.
 - Go through the disconnect cycle when there's an error while with the
