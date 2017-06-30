@@ -98,3 +98,11 @@ defmodule WebSockex.FragmentParseError do
     """
   end
 end
+
+defmodule WebSockex.NotConnectedError do
+  defexception [:connection_state]
+
+  def message(%__MODULE__{connection_state: :opening}) do
+    "Not Connected: Currently Opening the Connection."
+  end
+end

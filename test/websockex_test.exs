@@ -46,6 +46,10 @@ defmodule WebSockexTest do
       end
     end
 
+    def set_attr(pid, key, val) do
+      WebSockex.cast(pid, {:set_attr, key, val})
+    end
+
     def handle_connect(_conn, %{connect_badreply: true}), do: :lemons
     def handle_connect(_conn, %{connect_error: true}), do: raise "Connect Error"
     def handle_connect(_conn, %{connect_exit: true}), do: exit "Connect Exit"
@@ -433,35 +437,49 @@ defmodule WebSockexTest do
     assert_receive {:caught_binary, ^binary}
   end
 
-  test "send_frame", context do
-    TestClient.catch_attr(context.pid, :pong, self())
-    assert WebSockex.send_frame(context.pid, :ping) == :ok
+  describe "send_frame" do
+    test "can send a ping frame", context do
+      TestClient.catch_attr(context.pid, :pong, self())
+      assert WebSockex.send_frame(context.pid, :ping) == :ok
 
-    assert_receive :caught_pong
-  end
+      assert_receive :caught_pong
+    end
 
-  test "send_frame with error", %{pid: pid} do
-    Process.flag(:trap_exit, true)
+    test "handles errors", %{pid: pid} do
+      Process.flag(:trap_exit, true)
 
-    TestClient.catch_attr(pid, :disconnect)
+      TestClient.catch_attr(pid, :disconnect)
 
-    conn = TestClient.get_conn(pid)
-    # Really glad that I got those sys behaviors now
-    :sys.suspend(pid)
+      conn = TestClient.get_conn(pid)
+      # Really glad that I got those sys behaviors now
+      :sys.suspend(pid)
 
-    :gen_tcp.shutdown(conn.socket, :write)
-    task = Task.async(fn ->
-      WebSockex.send_frame(pid, {:text, "hello"})
-    end)
+      :gen_tcp.shutdown(conn.socket, :write)
+      task = Task.async(fn ->
+        WebSockex.send_frame(pid, {:text, "hello"})
+      end)
 
-    :sys.resume(pid)
+      :sys.resume(pid)
 
-    assert Task.await(task) == {:error, %WebSockex.ConnError{original: :closed}}
+      assert Task.await(task) == {:error, %WebSockex.ConnError{original: :closed}}
 
-    %{pid: task_pid} = task
-    assert_receive {:EXIT, ^task_pid, :normal}
-    assert_receive :caught_disconnect
-    assert_receive {:EXIT, ^pid, %WebSockex.ConnError{original: :closed}}
+      %{pid: task_pid} = task
+      assert_receive {:EXIT, ^task_pid, :normal}
+      assert_receive :caught_disconnect
+      assert_receive {:EXIT, ^pid, %WebSockex.ConnError{original: :closed}}
+    end
+
+    test "returns an error while opening", context do
+      send(context.server_pid, :connection_wait)
+      TestClient.set_attr(context.pid, :reconnect, true)
+
+      WebSockex.cast(context.pid, :close)
+
+      WebSockex.TestServer.receive_socket_pid()
+
+      assert WebSockex.send_frame(context.pid, {:text, "Test"}) ==
+        {:error, %WebSockex.NotConnectedError{connection_state: :opening}}
+    end
   end
 
   describe "handle_cast callback" do

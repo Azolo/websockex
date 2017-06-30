@@ -313,6 +313,7 @@ defmodule WebSockex do
   """
   @spec send_frame(pid, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
                                                  | %WebSockex.ConnError{}
+                                                 | %WebSockex.NotConnectedError{}
                                                  | %WebSockex.InvalidFrameError{}}
   def send_frame(pid, frame) do
     try do
@@ -442,6 +443,9 @@ defmodule WebSockex do
       {:system, from, req} ->
         state = Map.put(state, :connection_status, :connecting)
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+      {:"$websockex_send", from, _frame} ->
+        :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :opening}})
+        open_loop(parent, debug, state)
       {:EXIT, ^parent, reason} ->
         case state do
           %{reply_fun: reply_fun} ->
