@@ -49,11 +49,17 @@ defmodule WebSockex do
     and instead will invoke the `c:handle_disconnect/2` callback. This option
     only matters during process initialization. The `handle_disconnect`
     callback is always invoked if an established connection is lost.
+  - `:debug` - Options to set the debug options for `:sys.handle_debug`.
+    Unless you understand what these mean, I recommend you use the functions in
+    the `:sys` module to enable these. These functions are: `:sys.trace/2`,
+    `:sys.log/2`, `:sys.log_to_file/2`, `:sys.install/2`, `:sys.remove/2`, and
+    `:sys.no_debug/1`.
 
   Other possible option values include: `t:WebSockex.Conn.connection_option/0`
   """
   @type option :: WebSockex.Conn.connection_option
                   | {:async, boolean}
+                  | {:debug, [:sys.dbg_opt]}
                   | {:handle_initial_conn_failure, boolean}
 
   @typedoc """
