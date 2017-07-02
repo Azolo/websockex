@@ -330,7 +330,7 @@ defmodule WebSockex do
     {:ok, pid} | {:error, term}
   def init(parent, conn, module, module_state, opts) do
     # OTP stuffs
-    debug = :sys.debug_options([])
+    debug = :gen.debug_options(self(), opts)
 
     reply_fun = case Keyword.get(opts, :async, false) do
                   true ->
@@ -340,12 +340,15 @@ defmodule WebSockex do
                     &sync_init_fun(parent, &1)
                 end
 
-    state = %{conn: conn,
-              module: module,
-              module_state: module_state,
-              reply_fun: reply_fun,
-              buffer: <<>>,
-              fragment: nil}
+    state = %{
+      conn: conn,
+      module: module,
+      module_state: module_state,
+      name: self(),
+      reply_fun: reply_fun,
+      buffer: <<>>,
+      fragment: nil
+    }
 
     handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
 
@@ -606,7 +609,7 @@ defmodule WebSockex do
               do: :ok = WebSockex.Conn.socket_send(state.conn, binary_frame)
         case res do
           :ok ->
-            debug = sys_debug(debug, {:reply, frame, new_state}, state)
+            debug = sys_debug(debug, {:reply, function, frame}, state)
             websocket_loop(parent, debug, %{state | module_state: new_state})
           {:error, error} ->
             handle_close({:error, error}, parent, debug, %{state | module_state: new_state})
@@ -680,7 +683,7 @@ defmodule WebSockex do
     case res do
       :ok ->
         :gen.reply(from, :ok)
-        debug = sys_debug(debug, {:out, :sync_send, frame}, state)
+        debug = sys_debug(debug, {:socket_out, :sync_send, frame}, state)
         websocket_loop(parent, debug, state)
       {:error, %WebSockex.ConnError{}} = error ->
         :gen.reply(from, error)
