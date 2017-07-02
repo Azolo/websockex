@@ -461,12 +461,12 @@ defmodule WebSockexTest do
 
       :sys.resume(pid)
 
-      assert Task.await(task) == {:error, %WebSockex.ConnError{original: :closed}}
+      assert {:error, %WebSockex.ConnError{}} = Task.await(task)
 
       %{pid: task_pid} = task
       assert_receive {:EXIT, ^task_pid, :normal}
       assert_receive :caught_disconnect
-      assert_receive {:EXIT, ^pid, %WebSockex.ConnError{original: :closed}}
+      assert_receive {:EXIT, ^pid, %WebSockex.ConnError{}}
     end
 
     test "returns an error while opening", context do
