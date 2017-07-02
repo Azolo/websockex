@@ -36,6 +36,18 @@ defmodule WebSockex do
   """
   @type close_code :: integer
 
+  @typedoc """
+  Debug options to be parsed by `:sys.debug_options/1`.
+
+  These options can also be set after the process is running using the functions in
+  the Erlang `:sys` module.
+  """
+  @type debug_opts :: [:trace
+                       | :log
+                       | {:log, log_depth :: pos_integer}
+                       | :statistics
+                       | {:log_to_file, Path.t}]
+
   @type options :: [option]
 
   @typedoc """
@@ -50,16 +62,12 @@ defmodule WebSockex do
     only matters during process initialization. The `handle_disconnect`
     callback is always invoked if an established connection is lost.
   - `:debug` - Options to set the debug options for `:sys.handle_debug`.
-    Unless you understand what these mean, I recommend you use the functions in
-    the `:sys` module to enable these. These functions are: `:sys.trace/2`,
-    `:sys.log/2`, `:sys.log_to_file/2`, `:sys.install/2`, `:sys.remove/2`, and
-    `:sys.no_debug/1`.
 
   Other possible option values include: `t:WebSockex.Conn.connection_option/0`
   """
   @type option :: WebSockex.Conn.connection_option
                   | {:async, boolean}
-                  | {:debug, [:sys.dbg_opt]}
+                  | {:debug, debug_opts}
                   | {:handle_initial_conn_failure, boolean}
 
   @typedoc """
@@ -336,7 +344,7 @@ defmodule WebSockex do
     {:ok, pid} | {:error, term}
   def init(parent, conn, module, module_state, opts) do
     # OTP stuffs
-    debug = :gen.debug_options(self(), opts)
+    debug = parse_debug_options(self(), opts)
 
     reply_fun = case Keyword.get(opts, :async, false) do
                   true ->
@@ -917,6 +925,21 @@ defmodule WebSockex do
   defp print_event(io_dev, :connect, %{name: name}) do
     IO.puts(io_dev,
             "*DBG* #{inspect name} attempting to connect")
+  end
+
+  defp parse_debug_options(name, options) do
+    case List.keyfind(options, :debug, 0) do
+      {:debug, opts} ->
+        try do
+          :sys.debug_options(opts)
+        catch
+          _,_ ->
+            :error_logger.format('~p: ignoring bad debug options ~p~n',
+                                 [name, opts])
+            []
+        end
+      _ -> []
+    end
   end
 
   # Helpers (aka everything else)
