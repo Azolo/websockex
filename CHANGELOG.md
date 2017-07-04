@@ -1,5 +1,6 @@
 ## Unreleased
 ### Enhancements
+- Added debug printing for the `:sys` module.
 - `send_frame/2` is now synchronous and returns an error when connection is
   opening or closing.
 - Rework `Conn.new` to accept other protocols.
