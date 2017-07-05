@@ -1,4 +1,5 @@
 defmodule WebSockex do
+  alias WebSockex.{Utils}
   @handshake_guid "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
   @moduledoc ~S"""
@@ -344,7 +345,7 @@ defmodule WebSockex do
     {:ok, pid} | {:error, term}
   def init(parent, conn, module, module_state, opts) do
     # OTP stuffs
-    debug = parse_debug_options(self(), opts)
+    debug = Utils.parse_debug_options(self(), opts)
 
     reply_fun = case Keyword.get(opts, :async, false) do
                   true ->
@@ -486,7 +487,7 @@ defmodule WebSockex do
   defp websocket_loop(parent, debug, state) do
     case WebSockex.Frame.parse_frame(state.buffer) do
       {:ok, frame, buffer} ->
-        debug = sys_debug(debug, {:in, :frame, frame}, state)
+        debug = Utils.sys_debug(debug, {:in, :frame, frame}, state)
         handle_frame(frame, parent, debug, %{state | buffer: buffer})
       :incomplete ->
         transport = state.conn.transport
@@ -496,7 +497,7 @@ defmodule WebSockex do
             state = Map.put(state, :connection_status, :connected)
             :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
           {:"$websockex_cast", msg} ->
-            debug = sys_debug(debug, {:in, :cast, msg}, state)
+            debug = Utils.sys_debug(debug, {:in, :cast, msg}, state)
             common_handle({:handle_cast, msg}, parent, debug, state)
           {:"$websockex_send", from, frame} ->
             sync_send(frame, from, parent, debug, state)
@@ -510,7 +511,7 @@ defmodule WebSockex do
           {:EXIT, ^parent, reason} ->
             terminate(reason, parent, debug, state)
           msg ->
-            debug = sys_debug(debug, {:in, :msg, msg}, state)
+            debug = Utils.sys_debug(debug, {:in, :msg, msg}, state)
             common_handle({:handle_info, msg}, parent, debug, state)
         end
     end
@@ -586,12 +587,12 @@ defmodule WebSockex do
   end
   defp handle_fragment({:finish, next}, parent, debug, %{fragment: {type, part}} = state) do
     frame = {type, <<part::binary, next::binary>>}
-    debug = sys_debug(debug, {:in, :completed_fragment, frame}, state)
+    debug = Utils.sys_debug(debug, {:in, :completed_fragment, frame}, state)
     handle_frame(frame, parent, debug, %{state | fragment: nil})
   end
 
   defp handle_close({:remote, :closed} = reason, parent, debug, state) do
-    debug = sys_debug(debug, {:close, :remote, :unexpected}, state)
+    debug = Utils.sys_debug(debug, {:close, :remote, :unexpected}, state)
     new_conn = %{state.conn | socket: nil}
     on_disconnect(reason, parent, debug, %{state | conn: new_conn})
   end
@@ -623,7 +624,7 @@ defmodule WebSockex do
               do: :ok = WebSockex.Conn.socket_send(state.conn, binary_frame)
         case res do
           :ok ->
-            debug = sys_debug(debug, {:reply, function, frame}, state)
+            debug = Utils.sys_debug(debug, {:reply, function, frame}, state)
             websocket_loop(parent, debug, %{state | module_state: new_state})
           {:error, error} ->
             handle_close({:error, error}, parent, debug, %{state | module_state: new_state})
@@ -642,11 +643,11 @@ defmodule WebSockex do
   end
 
   defp handle_remote_close(reason, parent, debug, state) do
-    debug = sys_debug(debug, {:close, :remote, reason}, state)
+    debug = Utils.sys_debug(debug, {:close, :remote, reason}, state)
     # If the socket is already closed then that's ok, but the spec says to send
     # the close frame back in response to receiving it.
     debug = case send_close_frame(reason, state.conn) do
-      :ok -> sys_debug(debug, {:socket_out, :close, reason}, state)
+      :ok -> Utils.sys_debug(debug, {:socket_out, :close, reason}, state)
       _ -> debug
     end
 
@@ -655,10 +656,10 @@ defmodule WebSockex do
   end
 
   defp handle_local_close(reason, parent, debug, state) do
-    debug = sys_debug(debug, {:close, :local, reason}, state)
+    debug = Utils.sys_debug(debug, {:close, :local, reason}, state)
     case send_close_frame(reason, state.conn) do
       :ok ->
-        debug = sys_debug(debug, {:socket_out, :close, reason}, state)
+        debug = Utils.sys_debug(debug, {:socket_out, :close, reason}, state)
         Process.send_after(self(), :"$websockex_close_timeout", 5000)
         close_loop(reason, parent, debug, state)
       {:error, %WebSockex.ConnError{original: :closed}} ->
@@ -675,10 +676,10 @@ defmodule WebSockex do
 
   @spec handle_terminate_close(any, pid, any, any) :: no_return
   def handle_terminate_close(reason, parent, debug, state) do
-    debug = sys_debug(debug, {:close, :error, reason}, state)
+    debug = Utils.sys_debug(debug, {:close, :error, reason}, state)
 
     debug = case send_close_frame(:error,  state.conn) do
-      :ok -> sys_debug(debug, {:socket_out, :close, :error}, state)
+      :ok -> Utils.sys_debug(debug, {:socket_out, :close, :error}, state)
       _ -> debug
     end
 
@@ -697,7 +698,7 @@ defmodule WebSockex do
     case res do
       :ok ->
         :gen.reply(from, :ok)
-        debug = sys_debug(debug, {:socket_out, :sync_send, frame}, state)
+        debug = Utils.sys_debug(debug, {:socket_out, :sync_send, frame}, state)
         websocket_loop(parent, debug, state)
       {:error, %WebSockex.ConnError{}} = error ->
         :gen.reply(from, error)
@@ -731,7 +732,7 @@ defmodule WebSockex do
         init_failure(reason, parent, debug, %{state | module_state: new_module_state})
       {:reconnect, new_conn, new_module_state} ->
         state = %{state | conn: new_conn, module_state: new_module_state}
-        debug = sys_debug(debug, :reconnect, state)
+        debug = Utils.sys_debug(debug, :reconnect, state)
         case open_connection(parent, debug, state) do
           {:ok, new_state} ->
             module_init(parent, debug, new_state)
@@ -751,7 +752,7 @@ defmodule WebSockex do
         terminate(reason, parent, debug, %{state | module_state: new_module_state})
       {:reconnect, new_conn, new_module_state} ->
         state = %{state | conn: new_conn, module_state: new_module_state}
-        debug = sys_debug(debug, :reconnect, state)
+        debug = Utils.sys_debug(debug, :reconnect, state)
         case open_connection(parent, debug, state) do
           {:ok, new_state} ->
             reconnect(parent, debug, new_state)
@@ -784,7 +785,7 @@ defmodule WebSockex do
 
   defp open_connection(parent, debug, %{conn: conn} = state) do
     my_pid = self()
-    debug = sys_debug(debug, :connect, state)
+    debug = Utils.sys_debug(debug, :connect, state)
     task = Task.async(fn ->
       with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
            key <- :crypto.strong_rand_bytes(16) |> Base.encode64,
@@ -860,85 +861,6 @@ defmodule WebSockex do
         {:"$EXIT", %WebSockex.BadResponseError{module: state.module,
           function: :handle_disconnect, args: [status_map, state.module_state],
           response: badreply}}
-    end
-  end
-
-  # Debug Functions
-
-  def sys_debug([], _, _), do: []
-  def sys_debug(debug, event, state) do
-    :sys.handle_debug(debug, &print_event/3, state, event)
-  end
-
-  defp print_event(io_dev, {:in, :frame, frame}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} received frame: #{inspect frame}")
-  end
-  defp print_event(io_dev, {:in, :completed_fragment, frame}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} completed fragmented frame: #{inspect frame}")
-  end
-  defp print_event(io_dev, {:in, :cast, msg}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} received cast msg: #{inspect msg}")
-  end
-  defp print_event(io_dev, {:in, :msg, msg}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} received msg: #{inspect msg}")
-  end
-  defp print_event(io_dev, {:reply, func, frame}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} replying from #{inspect func} with #{inspect frame}")
-  end
-  defp print_event(io_dev, {:close, :remote, :unexpected}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} had the connection closed unexpectedly by the remote server")
-  end
-  defp print_event(io_dev, {:close, :remote, reason}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} closed remotely with reason: #{inspect reason}")
-  end
-  defp print_event(io_dev, {:close, :local, reason}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} closed locally with reason: #{inspect reason}")
-  end
-  defp print_event(io_dev, {:close, :error, error}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} closing due to error: #{inspect error}")
-  end
-  defp print_event(io_dev, {:socket_out, :close, :error}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} sending error close frame: {:close, 1011, \"\"}")
-  end
-  defp print_event(io_dev, {:socket_out, :close, frame}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} sending close frame: #{inspect frame}")
-  end
-  defp print_event(io_dev, {:socket_out, :sync_send, frame}, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} sending close frame: #{inspect frame}")
-  end
-  defp print_event(io_dev, :reconnect, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} attempting to reconnect")
-  end
-  defp print_event(io_dev, :connect, %{name: name}) do
-    IO.puts(io_dev,
-            "*DBG* #{inspect name} attempting to connect")
-  end
-
-  defp parse_debug_options(name, options) do
-    case List.keyfind(options, :debug, 0) do
-      {:debug, opts} ->
-        try do
-          :sys.debug_options(opts)
-        catch
-          _,_ ->
-            :error_logger.format('~p: ignoring bad debug options ~p~n',
-                                 [name, opts])
-            []
-        end
-      _ -> []
     end
   end
 
