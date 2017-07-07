@@ -1,5 +1,5 @@
 defmodule WebSockexTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest WebSockex
 
   test "Set URI default ports for ws and wss" do
