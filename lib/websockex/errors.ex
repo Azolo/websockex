@@ -1,3 +1,15 @@
+defmodule WebSockex.ApplicationError do
+  @moduledoc false
+  defexception [:reason]
+
+  def message(%__MODULE__{reason: :not_started}) do
+    """
+    The :websockex application is not started.
+    Please start the applications with Application.ensure_all_started(:websockex)
+    """
+  end
+end
+
 defmodule WebSockex.ConnError do
   @moduledoc false
   defexception [:original]

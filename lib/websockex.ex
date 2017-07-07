@@ -905,6 +905,10 @@ defmodule WebSockex do
 
   defp parse_uri(url) do
     case URI.parse(url) do
+      %URI{port: port, scheme: protocol} when protocol in ["ws", "wss"] and is_nil(port) ->
+        # Someone may have deleted the URI config but I'm going to assume it's
+        # just that the application didn't get them registered.
+        {:error, %WebSockex.ApplicationError{reason: :not_started}}
       # This is confusing to look at. But it's just a match with multiple guards
       %URI{host: host, port: port, scheme: protocol}
       when is_nil(host)
