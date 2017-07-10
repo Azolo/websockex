@@ -44,4 +44,46 @@ def application do
 end
 ```
 
+## Debugging
+
+WebSockex supports the debugging mechanism for [OTP Special Processes][special_process] provided through the `:sys` module.
+
+Since WebSockex rolls its own Special Process implementation, it's able to provide a lot more information than a regular
+`GenServer`.
+
+If, for example, I enable tracing with `EchoClient` from the examples (with `Logger` off), I would get this:
+
+```elixir
+iex> {:ok, pid} = EchoClient.start_link(debug: [:trace])
+*DBG* #PID<0.371.0> attempting to connect
+*DBG* #PID<0.371.0> sucessfully connected
+{:ok, #PID<0.371.0>}
+iex> EchoClient.echo(pid, "Hello")
+*DBG* #PID<0.371.0> sending frame: {:text, "Hello"}
+:ok
+*DBG* #PID<0.371.0> received frame: {:text, "Hello"}
+*DBG* #PID<0.371.0> received frame: :ping
+*DBG* #PID<0.371.0> replying from :handle_ping with :pong
+iex> EchoClient.echo(pid, "Close the things!")
+*DBG* #PID<0.371.0> sending frame: {:text, "Close the things!"}
+:ok
+*DBG* #PID<0.371.0> received frame: {:text, "Close the things!"}
+*DBG* #PID<0.371.0> closing with local reason: {:local, :normal}
+*DBG* #PID<0.371.0> sending close frame: {:local, :normal}
+*DBG* #PID<0.371.0> forcefully closed the connection because the server was taking too long close
+```
+
+I could also enable tracing after a process has started like this:
+
+```elixir
+iex> {:ok, pid} = EchoClient.start_link()
+iex> :sys.trace(pid, true)
+:ok
+iex> EchoClient.echo(pid, "Hi")
+*DBG* #PID<0.379.0> sending frame: {:text, "Hi"}
+:ok
+*DBG* #PID<0.379.0> received frame: {:text, "Hi"}
+```
+
+[special_process]: http://erlang.org/doc/design_principles/spec_proc.html
 [docs]: https://hexdocs.pm/websockex
