@@ -369,6 +369,7 @@ defmodule WebSockex do
 
     case open_connection(parent, debug, state) do
       {:ok, new_state} ->
+        debug = Utils.sys_debug(debug, :connected, state)
         module_init(parent, debug, new_state)
       {:error, error, new_state} when handle_conn_failure == true ->
         init_conn_failure(error, parent, debug, new_state)
@@ -533,9 +534,11 @@ defmodule WebSockex do
         close_loop(reason, parent, debug, state)
       {:tcp_closed, ^socket} ->
         new_conn = %{conn | socket: nil}
+        debug = Utils.sys_debug(debug, :closed, state)
         on_disconnect(reason, parent, debug, %{state | conn: new_conn})
       :"$websockex_close_timeout" ->
         new_conn = WebSockex.Conn.close_socket(conn)
+        debug = Utils.sys_debug(debug, :timeout_closed, state)
         on_disconnect(reason, parent, debug, %{state | conn: new_conn})
     end
   end
@@ -735,6 +738,7 @@ defmodule WebSockex do
         debug = Utils.sys_debug(debug, :reconnect, state)
         case open_connection(parent, debug, state) do
           {:ok, new_state} ->
+            debug = Utils.sys_debug(debug, :connected, state)
             module_init(parent, debug, new_state)
           {:error, new_reason, new_state} ->
             init_conn_failure(new_reason, parent, debug, new_state, attempt+1)
@@ -755,6 +759,7 @@ defmodule WebSockex do
         debug = Utils.sys_debug(debug, :reconnect, state)
         case open_connection(parent, debug, state) do
           {:ok, new_state} ->
+            debug = Utils.sys_debug(debug, :reconnected, state)
             reconnect(parent, debug, new_state)
           {:error, new_reason, new_state} ->
             on_disconnect(new_reason, parent, debug, new_state, attempt+1)

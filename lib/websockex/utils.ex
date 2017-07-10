@@ -30,15 +30,23 @@ defmodule WebSockex.Utils do
   end
   defp print_event(io_dev, {:close, :remote, reason}, %{name: name}) do
     IO.puts(io_dev,
-            "*DBG* #{inspect name} closed remotely with reason: #{inspect reason}")
+            "*DBG* #{inspect name} closing with the remote reason: #{inspect reason}")
   end
   defp print_event(io_dev, {:close, :local, reason}, %{name: name}) do
     IO.puts(io_dev,
-            "*DBG* #{inspect name} closed locally with reason: #{inspect reason}")
+            "*DBG* #{inspect name} closing with local reason: #{inspect reason}")
   end
   defp print_event(io_dev, {:close, :error, error}, %{name: name}) do
     IO.puts(io_dev,
             "*DBG* #{inspect name} closing due to error: #{inspect error}")
+  end
+  defp print_event(io_dev, :closed, %{name: name}) do
+    IO.puts(io_dev,
+            "*DBG* #{inspect name} closed the connection sucessfully")
+  end
+  defp print_event(io_dev, :timeout_closed, %{name: name}) do
+    IO.puts(io_dev,
+            "*DBG* #{inspect name} forcefully closed the connection because the server was taking too long close")
   end
   defp print_event(io_dev, {:socket_out, :close, :error}, %{name: name}) do
     IO.puts(io_dev,
@@ -59,6 +67,14 @@ defmodule WebSockex.Utils do
   defp print_event(io_dev, :connect, %{name: name}) do
     IO.puts(io_dev,
             "*DBG* #{inspect name} attempting to connect")
+  end
+  defp print_event(io_dev, :connected, %{name: name}) do
+    IO.puts(io_dev,
+            "*DBG* #{inspect name} sucessfully connected")
+  end
+  defp print_event(io_dev, :reconnected, %{name: name}) do
+    IO.puts(io_dev,
+            "*DBG* #{inspect name} sucessfully reconnected")
   end
 
   def parse_debug_options(name, options) do
