@@ -50,7 +50,7 @@ defmodule WebSockex.Utils do
   end
   defp print_event(io_dev, {:socket_out, :sync_send, frame}, %{name: name}) do
     IO.puts(io_dev,
-            "*DBG* #{inspect name} sending close frame: #{inspect frame}")
+            "*DBG* #{inspect name} sending frame: #{inspect frame}")
   end
   defp print_event(io_dev, :reconnect, %{name: name}) do
     IO.puts(io_dev,
