@@ -2,8 +2,8 @@ defmodule EchoClient do
   use WebSockex
   require Logger
 
-  def start_link do
-    WebSockex.start_link("wss://echo.websocket.org/?encoding=text", __MODULE__, :state)
+  def start_link(opts \\ []) do
+    WebSockex.start_link("wss://echo.websocket.org/?encoding=text", __MODULE__, :fake_state, opts)
   end
 
   @spec echo(pid, String.t) :: :ok
@@ -18,13 +18,13 @@ defmodule EchoClient do
     WebSockex.send_frame(pid, frame)
   end
 
-  def handle_frame({:text, "Close the things!" = msg}, :state) do
+  def handle_frame({:text, "Close the things!" = msg}, :fake_state) do
     Logger.info("Received Message: #{msg}")
-    {:close, :state}
+    {:close, :fake_state}
   end
-  def handle_frame({:text, msg}, :state) do
+  def handle_frame({:text, msg}, :fake_state) do
     Logger.info("Received Message: #{msg}")
-    {:ok, :state}
+    {:ok, :fake_state}
   end
 
   def handle_disconnect(%{reason: {:local, reason}}, state) do
