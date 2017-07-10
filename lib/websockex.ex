@@ -63,12 +63,14 @@ defmodule WebSockex do
     only matters during process initialization. The `handle_disconnect`
     callback is always invoked if an established connection is lost.
   - `:debug` - Options to set the debug options for `:sys.handle_debug`.
+  - `:name` - An atom that the registers the process with name locally.
 
   Other possible option values include: `t:WebSockex.Conn.connection_option/0`
   """
   @type option :: WebSockex.Conn.connection_option
                   | {:async, boolean}
                   | {:debug, debug_opts}
+                  | {:name, atom}
                   | {:handle_initial_conn_failure, boolean}
 
   @typedoc """
@@ -275,7 +277,7 @@ defmodule WebSockex do
     {:ok, pid} | {:error, term}
   def start(conn_info, module, state, opts \\ [])
   def start(%WebSockex.Conn{} = conn, module, state, opts) do
-    :proc_lib.start(__MODULE__, :init, [self(), conn, module, state, opts])
+    Utils.spawn(:no_link, conn, module, state, opts)
   end
   def start(url, module, state, opts) do
     case parse_uri(url) do
@@ -302,7 +304,7 @@ defmodule WebSockex do
     {:ok, pid} | {:error, term}
   def start_link(conn_info, module, state, opts \\ [])
   def start_link(conn = %WebSockex.Conn{}, module, state, opts) do
-    :proc_lib.start_link(__MODULE__, :init, [self(), conn, module, state, opts])
+    Utils.spawn(:link, conn, module, state, opts)
   end
   def start_link(url, module, state, opts) do
     case parse_uri(url) do
@@ -344,37 +346,17 @@ defmodule WebSockex do
   @spec init(pid, WebSockex.Conn.t, module, term, options) ::
     {:ok, pid} | {:error, term}
   def init(parent, conn, module, module_state, opts) do
-    # OTP stuffs
-    debug = Utils.parse_debug_options(self(), opts)
+    do_init(parent, self(), conn, module, module_state, opts)
+  end
 
-    reply_fun = case Keyword.get(opts, :async, false) do
-                  true ->
-                    :proc_lib.init_ack(parent, {:ok, self()})
-                    &async_init_fun/1
-                  false ->
-                    &sync_init_fun(parent, &1)
-                end
-
-    state = %{
-      conn: conn,
-      module: module,
-      module_state: module_state,
-      name: self(),
-      reply_fun: reply_fun,
-      buffer: <<>>,
-      fragment: nil
-    }
-
-    handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
-
-    case open_connection(parent, debug, state) do
-      {:ok, new_state} ->
-        debug = Utils.sys_debug(debug, :connected, state)
-        module_init(parent, debug, new_state)
-      {:error, error, new_state} when handle_conn_failure == true ->
-        init_conn_failure(error, parent, debug, new_state)
-      {:error, error, _} ->
-        state.reply_fun.({:error, error})
+  @spec init(pid, atom, WebSockex.Conn.t, module, term, options) ::
+    {:ok, pid} | {:error, term}
+  def init(parent, name, conn, module, module_state, opts) do
+    case Utils.register(name) do
+      true ->
+        do_init(parent, name, conn, module, module_state, opts)
+      {:error, _} = error ->
+        :proc_lib.init_ack(parent, error)
     end
   end
 
@@ -453,6 +435,41 @@ defmodule WebSockex do
   end
 
   # Internals! Yay
+
+  defp do_init(parent, name, conn, module, module_state, opts) do
+    # OTP stuffs
+    debug = Utils.parse_debug_options(self(), opts)
+
+    reply_fun = case Keyword.get(opts, :async, false) do
+                  true ->
+                    :proc_lib.init_ack(parent, {:ok, self()})
+                    &async_init_fun/1
+                  false ->
+                    &sync_init_fun(parent, &1)
+                end
+
+    state = %{
+      conn: conn,
+      module: module,
+      module_state: module_state,
+      name: name,
+      reply_fun: reply_fun,
+      buffer: <<>>,
+      fragment: nil
+    }
+
+    handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
+
+    case open_connection(parent, debug, state) do
+      {:ok, new_state} ->
+        debug = Utils.sys_debug(debug, :connected, state)
+        module_init(parent, debug, new_state)
+      {:error, error, new_state} when handle_conn_failure == true ->
+        init_conn_failure(error, parent, debug, new_state)
+      {:error, error, _} ->
+        state.reply_fun.({:error, error})
+    end
+  end
 
   # Loops
 

@@ -218,6 +218,19 @@ defmodule WebSockexTest do
     [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
   end
 
+  describe "named processes" do
+    test "can be registered as a local named process", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{}, name: :test0)
+      assert Process.whereis(:test0) == pid
+    end
+
+    test "errors with an already registered name", context do
+      Process.register(self(), :test1)
+      assert TestClient.start_link(context.url, %{}, name: :test1) ==
+        {:error, {:already_started, self()}}
+    end
+  end
+
   describe "start" do
     test "with a Conn struct", context do
       conn = WebSockex.Conn.new(URI.parse(context.url))

@@ -1,4 +1,41 @@
 defmodule WebSockex.Utils do
+  @moduledoc false
+
+  # Startup
+
+  def spawn(link, conn, module, state, opts) do
+    case List.keyfind(opts, :name, 0) do
+      {:name, name} ->
+        case Process.whereis(name) do
+          nil ->
+            do_spawn(link, [self(), name, conn, module, state, opts])
+          pid ->
+            {:error, {:already_started, pid}}
+        end
+      nil ->
+        do_spawn(link, [self(), conn, module, state, opts])
+    end
+  end
+
+  defp do_spawn(:link, args) do
+    :proc_lib.start_link(WebSockex, :init, args)
+  end
+  defp do_spawn(:no_link, args) do
+    :proc_lib.start(WebSockex, :init, args)
+  end
+
+  def register(name) do
+    try do
+      Process.register(self(), name)
+    catch
+      :error, _ ->
+        {:error, {:already_started, Process.whereis(name)}}
+    end
+  end
+
+
+  # Debugging
+
   def sys_debug([], _, _), do: []
   def sys_debug(debug, event, state) do
     :sys.handle_debug(debug, &print_event/3, state, event)
@@ -91,6 +128,4 @@ defmodule WebSockex.Utils do
       _ -> []
     end
   end
-
-
 end

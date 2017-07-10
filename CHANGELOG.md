@@ -11,6 +11,7 @@
   error. (Like an `Exception` in the middle of a callback)
 - Add a more specific error when the `:websockex` application hasn't been
   started yet.
+- Added a `:name` options for local registration.
 
 ### Bug Fixes
 - Fix a couple of places where the call stack wasn't being properly tail-call
