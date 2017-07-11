@@ -50,6 +50,16 @@ defmodule WebSockexTest do
       WebSockex.cast(pid, {:set_attr, key, val})
     end
 
+    def get_state(pid) do
+      :ok = WebSockex.cast(pid, {:get_state, self()})
+
+      receive do
+        msg -> msg
+      after
+        200 -> raise "State didn't return after 200ms"
+      end
+    end
+
     def handle_connect(_conn, %{connect_badreply: true}), do: :lemons
     def handle_connect(_conn, %{connect_error: true}), do: raise "Connect Error"
     def handle_connect(_conn, %{connect_exit: true}), do: exit "Connect Exit"
@@ -228,6 +238,13 @@ defmodule WebSockexTest do
       Process.register(self(), :test1)
       assert TestClient.start_link(context.url, %{}, name: :test1) ==
         {:error, {:already_started, self()}}
+    end
+
+    test "can receive cast messages", context do
+      {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: :test_cast)
+      WebSockex.TestServer.receive_socket_pid
+
+      assert %{test: :yep, conn: _} = TestClient.get_state(:test_cast)
     end
   end
 

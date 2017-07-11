@@ -319,26 +319,34 @@ defmodule WebSockex do
   @doc """
   Asynchronously sends a message to a client that is handled by `c:handle_cast/2`.
   """
-  @spec cast(pid, term) :: :ok
+  @spec cast(pid | atom, term) :: :ok
   def cast(client, message) do
     send(client, {:"$websockex_cast", message})
     :ok
   end
 
   @doc """
-  Queue a frame to be sent asynchronously.
+  Sends a frame through the WebSocket.
+
+  If the connection is either connecting or closing then this will return an
+  error tuple with a `WebSockex.NotConnectedError` exception struct as the
+  second element.
+
+  If a connection failure is discovered while sending then it will return an
+  error tuple with a `WebSockex.ConnError` exception struct as the second
+  element.
   """
-  @spec send_frame(pid, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
+  @spec send_frame(pid | atom, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
                                                  | %WebSockex.ConnError{}
                                                  | %WebSockex.NotConnectedError{}
                                                  | %WebSockex.InvalidFrameError{}}
-  def send_frame(pid, frame) do
+  def send_frame(client, frame) do
     try do
-      {:ok, res} = :gen.call(pid, :"$websockex_send", frame)
+      {:ok, res} = :gen.call(client, :"$websockex_send", frame)
       res
     catch
       _, reason ->
-        exit({reason, {__MODULE__, :call, [pid, frame]}})
+        exit({reason, {__MODULE__, :call, [client, frame]}})
     end
   end
 
