@@ -1,4 +1,4 @@
-## Unreleased
+## 0.4.0
 ### Breaking Changes
 - `send_frame/2` is now synchronous and returns an error when connection is
   opening or closing.
