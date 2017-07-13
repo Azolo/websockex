@@ -690,7 +690,7 @@ defmodule WebSockex do
         debug = Utils.sys_debug(debug, {:socket_out, :close, reason}, state)
         Process.send_after(self(), :"$websockex_close_timeout", 5000)
         close_loop(reason, parent, debug, state)
-      {:error, %WebSockex.ConnError{original: :closed}} ->
+      {:error, %WebSockex.ConnError{original: reason}} when reason in [:closed, :einval] ->
         close_loop({:remote, :closed}, parent, debug, state)
     end
   end
@@ -728,7 +728,7 @@ defmodule WebSockex do
         :gen.reply(from, :ok)
         debug = Utils.sys_debug(debug, {:socket_out, :sync_send, frame}, state)
         websocket_loop(parent, debug, state)
-      {:error, %WebSockex.ConnError{}} = error ->
+      {:error, %WebSockex.ConnError{original: reason}} = error when reason in [:closed, :einval] ->
         :gen.reply(from, error)
         handle_close(error, parent, debug, state)
       {:error, _} = error ->
