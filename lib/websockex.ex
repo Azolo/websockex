@@ -532,8 +532,6 @@ defmodule WebSockex do
             websocket_loop(parent, debug, %{state | buffer: buffer})
           {:tcp_closed, ^socket} ->
             handle_close({:remote, :closed}, parent, debug, state)
-          :"websockex_close_timeout" ->
-            websocket_loop(parent, debug, state)
           {:EXIT, ^parent, reason} ->
             terminate(reason, parent, debug, state)
           msg ->
@@ -543,7 +541,7 @@ defmodule WebSockex do
     end
   end
 
-  defp close_loop(reason, parent, debug, %{conn: conn} = state) do
+  defp close_loop(reason, parent, debug, %{conn: conn, timer_ref: timer_ref} = state) do
     transport = state.conn.transport
     socket = state.conn.socket
     receive do
@@ -560,6 +558,8 @@ defmodule WebSockex do
       {:tcp_closed, ^socket} ->
         new_conn = %{conn | socket: nil}
         debug = Utils.sys_debug(debug, :closed, state)
+        purge_timer(timer_ref, :"websockex_close_timeout")
+        state = Map.delete(state, :timer_ref)
         on_disconnect(reason, parent, debug, %{state | conn: new_conn})
       :"$websockex_close_timeout" ->
         new_conn = WebSockex.Conn.close_socket(conn)
@@ -679,8 +679,8 @@ defmodule WebSockex do
       _ -> debug
     end
 
-    Process.send_after(self(), :"$websockex_close_timeout", 5000)
-    close_loop(reason, parent, debug, state)
+    timer_ref = Process.send_after(self(), :"$websockex_close_timeout", 5000)
+    close_loop(reason, parent, debug, Map.put(state, :timer_ref, timer_ref))
   end
 
   defp handle_local_close(reason, parent, debug, state) do
@@ -688,18 +688,18 @@ defmodule WebSockex do
     case send_close_frame(reason, state.conn) do
       :ok ->
         debug = Utils.sys_debug(debug, {:socket_out, :close, reason}, state)
-        Process.send_after(self(), :"$websockex_close_timeout", 5000)
-        close_loop(reason, parent, debug, state)
+        timer_ref = Process.send_after(self(), :"$websockex_close_timeout", 5000)
+        close_loop(reason, parent, debug, Map.put(state, :timer_ref, timer_ref))
       {:error, %WebSockex.ConnError{original: reason}} when reason in [:closed, :einval] ->
-        close_loop({:remote, :closed}, parent, debug, state)
+        handle_close({:remote, :closed}, parent, debug, state)
     end
   end
 
   defp handle_error_close(reason, parent, debug, state) do
     send_close_frame(:error, state.conn)
 
-    Process.send_after(self(), :"$websockex_close_timeout", 5000)
-    close_loop(reason, parent, debug, state)
+    timer_ref = Process.send_after(self(), :"$websockex_close_timeout", 5000)
+    close_loop(reason, parent, debug, Map.put(state, :timer_ref, timer_ref))
   end
 
   @spec handle_terminate_close(any, pid, any, any) :: no_return
@@ -947,6 +947,18 @@ defmodule WebSockex do
         {:error, %WebSockex.URLError{url: url}}
       %URI{} = uri ->
         {:ok, uri}
+    end
+  end
+
+  defp purge_timer(ref, msg) do
+    case Process.cancel_timer(ref) do
+      i when is_integer(i) -> :ok
+      false ->
+        receive do
+          ^msg -> :ok
+        after
+          100 -> :ok
+        end
     end
   end
 end
