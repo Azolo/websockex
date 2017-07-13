@@ -1,3 +1,8 @@
+## Unreleased
+### Bug Fixes
+- No longer invoke `handle_disconnect` if there is reason to exit from invoking
+  a callback. (e.g. an exception was raised)
+
 ## 0.4.0
 ### Breaking Changes
 - `send_frame/2` is now synchronous and returns an error when connection is

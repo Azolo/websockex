@@ -890,6 +890,19 @@ defmodule WebSockexTest do
       TestClient.catch_attr(context.pid, :disconnect, self())
     end
 
+    test "is not invoked when there is an exception during runtime", context do
+      TestClient.set_attr(context.pid, :reconnect, true)
+      TestClient.catch_attr(context.pid, :terminate, self())
+      WebSockex.cast(context.pid, :error)
+
+      assert_receive {1011, ""}
+      assert_receive :terminate
+      refute_received :caught_disconnect
+      refute_received :caught_disconnect
+      pid = context.pid
+      assert_receive {:DOWN, _ref, :process, ^pid, {%RuntimeError{message: "Cast Error"}, _}}
+    end
+
     test "is invoked when receiving a close frame", context do
       send(context.server_pid, :close)
 

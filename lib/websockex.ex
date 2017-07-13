@@ -662,7 +662,7 @@ defmodule WebSockex do
       {:close, {close_code, message}, new_state} ->
         handle_close({:local, close_code, message}, parent, debug, %{state | module_state: new_state})
       {:"$EXIT", reason} ->
-        handle_error_close(reason, parent, debug, state)
+        handle_terminate_close(reason, parent, debug, state)
       badreply ->
         error = %WebSockex.BadResponseError{module: state.module, function: function,
           args: [msg, state.module_state], response: badreply}
