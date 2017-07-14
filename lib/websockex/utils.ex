@@ -6,7 +6,7 @@ defmodule WebSockex.Utils do
   def spawn(link, conn, module, state, opts) do
     case List.keyfind(opts, :name, 0) do
       {:name, name} ->
-        case Process.whereis(name) do
+        case whereis(name) do
           nil ->
             do_spawn(link, [self(), name, conn, module, state, opts])
           pid ->
@@ -24,6 +24,14 @@ defmodule WebSockex.Utils do
     :proc_lib.start(WebSockex, :init, args)
   end
 
+  # Named Processes
+
+  def register({:via, mod, name} = where_tup) do
+    case mod.register_name(name, self()) do
+      :yes -> true
+      :no -> whereis(where_tup)
+    end
+  end
   def register(name) do
     try do
       Process.register(self(), name)
@@ -33,6 +41,20 @@ defmodule WebSockex.Utils do
     end
   end
 
+  def send({:via, mod, name}, msg) do
+    mod.send(name, msg)
+  end
+  def send(dest, msg) do
+    Kernel.send(dest, msg)
+  end
+
+  def whereis({:via, mod, name}) do
+    case mod.whereis_name(name) do
+      :undefined -> nil
+      other -> other
+    end
+  end
+  def whereis(name), do: Process.whereis(name)
 
   # Debugging
 

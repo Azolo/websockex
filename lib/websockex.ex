@@ -24,6 +24,8 @@ defmodule WebSockex do
   ```
   """
 
+  @type client :: pid | :atom | {:via, module, atom}
+
   @type frame :: {:ping | :ping, nil | message :: binary}
                  | {:text | :binary, message :: binary}
 
@@ -319,9 +321,9 @@ defmodule WebSockex do
   @doc """
   Asynchronously sends a message to a client that is handled by `c:handle_cast/2`.
   """
-  @spec cast(pid | atom, term) :: :ok
+  @spec cast(client, term) :: :ok
   def cast(client, message) do
-    send(client, {:"$websockex_cast", message})
+    Utils.send(client, {:"$websockex_cast", message})
     :ok
   end
 
@@ -336,10 +338,10 @@ defmodule WebSockex do
   error tuple with a `WebSockex.ConnError` exception struct as the second
   element.
   """
-  @spec send_frame(pid | atom, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
-                                                 | %WebSockex.ConnError{}
-                                                 | %WebSockex.NotConnectedError{}
-                                                 | %WebSockex.InvalidFrameError{}}
+  @spec send_frame(client, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
+                                                  | %WebSockex.ConnError{}
+                                                  | %WebSockex.NotConnectedError{}
+                                                  | %WebSockex.InvalidFrameError{}}
   def send_frame(client, frame) do
     try do
       {:ok, res} = :gen.call(client, :"$websockex_send", frame)

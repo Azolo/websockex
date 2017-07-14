@@ -228,23 +228,53 @@ defmodule WebSockexTest do
     [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
   end
 
-  describe "named processes" do
-    test "can be registered as a local named process", context do
-      {:ok, pid} = TestClient.start_link(context.url, %{}, name: :test0)
-      assert Process.whereis(:test0) == pid
+  describe "local named processes" do
+    setup context do
+      name = context.test
+      [name: name]
+    end
+
+    test "can be registered with :name option", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{}, name: context.name)
+      assert WebSockex.Utils.whereis(context.name) == pid
     end
 
     test "errors with an already registered name", context do
-      Process.register(self(), :test1)
-      assert TestClient.start_link(context.url, %{}, name: :test1) ==
+      Process.register(self(), context.name)
+      assert TestClient.start_link(context.url, %{}, name: context.name) ==
         {:error, {:already_started, self()}}
     end
 
     test "can receive cast messages", context do
-      {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: :test_cast)
+      {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: context.name)
       WebSockex.TestServer.receive_socket_pid
 
-      assert %{test: :yep, conn: _} = TestClient.get_state(:test_cast)
+      assert %{test: :yep, conn: _} = TestClient.get_state(context.name)
+    end
+  end
+
+  describe "named processes with :via" do
+    setup context do
+      name = {:via, :global, context.test}
+      [name: name]
+    end
+
+    test "can be registered with :name option", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{}, name: context.name)
+      assert WebSockex.Utils.whereis(context.name) == pid
+    end
+
+    test "errors with an already registered name", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{}, name: context.name)
+      assert TestClient.start_link(context.url, %{}, name: context.name) ==
+        {:error, {:already_started, pid}}
+    end
+
+    test "can receive cast messages", context do
+      {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: context.name)
+      WebSockex.TestServer.receive_socket_pid
+
+      assert %{test: :yep, conn: _} = TestClient.get_state(context.name)
     end
   end
 
