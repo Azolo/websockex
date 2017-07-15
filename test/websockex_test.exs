@@ -278,6 +278,31 @@ defmodule WebSockexTest do
     end
   end
 
+  describe "named processes with :global" do
+    setup context do
+      name = {:global, context.test}
+      [name: name]
+    end
+
+    test "can be registered with :name option", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{}, name: context.name)
+      assert WebSockex.Utils.whereis(context.name) == pid
+    end
+
+    test "errors with an already registered name", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{}, name: context.name)
+      assert TestClient.start_link(context.url, %{}, name: context.name) ==
+        {:error, {:already_started, pid}}
+    end
+
+    test "can receive cast messages", context do
+      {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: context.name)
+      WebSockex.TestServer.receive_socket_pid
+
+      assert %{test: :yep, conn: _} = TestClient.get_state(context.name)
+    end
+  end
+
   describe "start" do
     test "with a Conn struct", context do
       conn = WebSockex.Conn.new(URI.parse(context.url))

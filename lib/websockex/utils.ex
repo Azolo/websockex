@@ -26,6 +26,7 @@ defmodule WebSockex.Utils do
 
   # Named Processes
 
+  def register({:global, name}), do: register({:via, :global, name})
   def register({:via, mod, name} = where_tup) do
     case mod.register_name(name, self()) do
       :yes -> true
@@ -41,6 +42,7 @@ defmodule WebSockex.Utils do
     end
   end
 
+  def send({:global, name}, msg), do: WebSockex.Utils.send({:via, :global, name}, msg)
   def send({:via, mod, name}, msg) do
     mod.send(name, msg)
   end
@@ -48,6 +50,7 @@ defmodule WebSockex.Utils do
     Kernel.send(dest, msg)
   end
 
+  def whereis({:global, name}), do: whereis({:via, :global, name})
   def whereis({:via, mod, name}) do
     case mod.whereis_name(name) do
       :undefined -> nil
