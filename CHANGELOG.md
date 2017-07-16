@@ -1,4 +1,8 @@
 ## Unreleased
+### Enhancements
+- Allow `:via` and `:global` tuples for named registration. This includes
+  handling for `cast/2` and `send_frame/2`.
+
 ### Bug Fixes
 - No longer invoke `handle_disconnect` if there is reason to exit from invoking
   a callback. (e.g. an exception was raised)
