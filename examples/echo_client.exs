@@ -12,12 +12,6 @@ defmodule EchoClient do
     WebSockex.send_frame(client, {:text, message})
   end
 
-  @spec send_frame(pid, WebSockex.frame) :: :ok
-  def send_frame(pid, {:text, msg} = frame) do
-    Logger.info("Sending message: #{msg}")
-    WebSockex.send_frame(pid, frame)
-  end
-
   def handle_connect(_conn, state) do
     Logger.info("Connected!")
     {:ok, state}
@@ -49,12 +43,12 @@ end
 
 {:ok, pid} = EchoClient.start_link()
 
-EchoClient.send_frame(pid, {:text, "Yo Homies!"})
-EchoClient.send_frame(pid, {:text, "This and That!"})
-EchoClient.send_frame(pid, {:text, "Can you please reply yourself?"})
+EchoClient.echo(pid, "Yo Homies!")
+EchoClient.echo(pid, "This and That!")
+EchoClient.echo(pid, "Can you please reply yourself?")
 
 Process.sleep 1000
 
-EchoClient.send_frame(pid, {:text, "Close the things!"})
+EchoClient.echo(pid, "Close the things!")
 
 Process.sleep 1500
