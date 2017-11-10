@@ -828,7 +828,7 @@ defmodule WebSockex do
       do
         :ok = WebSockex.Conn.controlling_process(conn, my_pid)
         :ok = WebSockex.Conn.set_active(conn)
-        {:ok, conn}
+        {:ok, %{conn | resp_headers: headers}}
       end
     end)
     open_loop(parent, debug, Map.put(state, :task, task))

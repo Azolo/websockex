@@ -382,6 +382,22 @@ defmodule WebSockexTest do
     end
   end
 
+  test "can handle initial connect headers" do
+    {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+
+    on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+
+    {:ok, pid} = TestClient.start_link(url, %{}, cacerts: WebSockex.TestServer.cacerts)
+    conn = TestClient.get_conn pid
+    
+    headers = Enum.into(conn.resp_headers, %{})
+    refute is_nil headers[:Connection]
+    refute is_nil headers[:Upgrade]
+    refute is_nil headers["Sec-Websocket-Accept"]
+
+    TestClient.catch_attr(pid, :pong, self())
+  end
+
   test "can connect to secure server" do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
 
