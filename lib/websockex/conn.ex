@@ -21,7 +21,8 @@ defmodule WebSockex.Conn do
             socket_connect_timeout: @socket_connect_timeout_default,
             socket_recv_timeout: @socket_recv_timeout_default,
             cacerts: nil,
-            insecure: true
+            insecure: true,
+            resp_headers: []
 
   @type socket :: :gen_tcp.socket | :ssl.sslsocket
   @type header :: {field :: String.t, value :: String.t}
@@ -62,7 +63,8 @@ defmodule WebSockex.Conn do
                          transport: transport,
                          socket: socket | nil,
                          socket_connect_timeout: non_neg_integer,
-                         socket_recv_timeout: non_neg_integer}
+                         socket_recv_timeout: non_neg_integer,
+                         resp_headers: [header]}
 
   @doc """
   Returns a new `WebSockex.Conn` struct from a uri and options.
