@@ -2,6 +2,7 @@
 ### Enhancements
 - Allow `:via` and `:global` tuples for named registration. This includes
   handling for `cast/2` and `send_frame/2`.
+- Add access to response headers during `handle_connect/2` via `Conn.resp_headers`.
 
 ### Bug Fixes
 - No longer invoke `handle_disconnect` if there is reason to exit from invoking
