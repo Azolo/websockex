@@ -115,7 +115,7 @@ end
 ```
 
 
-#### Example Usage With a Chrome Remote Debugging Enabled Instance (or driver), and using Poison to decode/encode the remote-protocol message passing (assuming you have started chrome with a remote debugging port, and have the WebSocket address for the page/tab in question):
+#### Example Usage With a Chrome Remote Debugging Enabled Instance (or driver), and using Poison to decode/encode the remote-protocol message passing (assuming you have started chrome with a remote debugging port, and have the WebSocket address for the page/tab in question), closing chrome would cause {:remote, :closed} to be raised, but in this case we really don't care:
 
 ```elixir
 defmodule ChromeDebugger do
@@ -127,6 +127,10 @@ defmodule ChromeDebugger do
        WebSockex.send_frame(pid, {:text, Poison.encode!(%{id: 2, method: "Runtime.enable", params: %{}})})
        WebSockex.send_frame(pid, {:text, Poison.encode!(%{id: 3, method: "Page.enable", params: %{}})})
        {:ok, pid}
+     end
+
+     def terminate(reason, state) do
+       exit(:normal)
      end
 
      def handle_frame({_type, msg}, state) do
