@@ -1,0 +1,37 @@
+defmodule ChromeDebugger do
+  use WebSockex
+     
+  def start(url, state) do
+    {:ok, pid} = WebSockex.start(url, __MODULE__, state)
+    WebSockex.send_frame(pid, {:text, Poison.encode!(%{id: 1, method: "Network.enable", params: %{}})})
+    WebSockex.send_frame(pid, {:text, Poison.encode!(%{id: 2, method: "Runtime.enable", params: %{}})})
+    WebSockex.send_frame(pid, {:text, Poison.encode!(%{id: 3, method: "Page.enable", params: %{}})})
+    {:ok, pid}
+  end
+
+  def terminate(reason, state) do
+    exit(:normal)
+  end
+
+  def handle_frame({_type, msg}, state) do
+    case Poison.decode(msg) do
+      {:error, error} ->
+        Logger.debug(inspect msg)
+        Logger.error(inspect error)
+      {:ok, message} ->
+        case message["method"] do
+          "Network.webSocketFrameReceived" ->
+            with true <- message["params"]["response"]["opcode"] == 1,
+                 message_pl <- message["params"]["response"]["payloadData"]
+              do
+              IO.inspect(message_pl)
+              else
+                _ -> :ok
+            end
+          _ -> :ok
+        end
+    end
+    {:ok, state}
+  end
+  
+end
