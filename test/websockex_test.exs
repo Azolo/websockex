@@ -1052,8 +1052,17 @@ defmodule WebSockexTest do
       assert_receive {:caught_disconnect, {:remote, :closed}}
     end
 
-    test "can handle random remote closures", context do
+    test "can handle socket terminations", context do
       Process.exit(context.server_pid, :kill)
+
+      assert_receive {:caught_disconnect, {:remote, :closed}}
+    end
+
+    test "can handle ssl socket terminations", context do
+      WebSockex.cast(context.pid, {:send_conn, self()})
+      assert_receive conn = %WebSockex.Conn{}
+
+      send(context.pid, {:ssl_closed, conn.socket})
 
       assert_receive {:caught_disconnect, {:remote, :closed}}
     end
