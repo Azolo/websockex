@@ -40,26 +40,37 @@ defmodule WebSockex.ConnTest do
       socket_connect_timeout: 6000,
       socket_recv_timeout: 5000}
 
-    regular_uri = URI.parse("ws://localhost/ws")
-    assert WebSockex.Conn.new(regular_uri,
-                              extra_headers: [{"Pineapple", "Cake"}],
-                              socket_connect_timeout: 123,
-                              socket_recv_timeout: 456) ==
-      %{tcp_conn | socket_connect_timeout: 123, socket_recv_timeout: 456}
+    regular_url = "ws://localhost/ws"
+    regular_uri = URI.parse(regular_url)
+    regular_opts = [
+      extra_headers: [{"Pineapple", "Cake"}],
+      socket_connect_timeout: 123,
+      socket_recv_timeout: 456\
+    ]
 
-    ssl_uri = URI.parse("wss://localhost/ws")
-    assert WebSockex.Conn.new(ssl_uri, extra_headers: [{"Pineapple", "Cake"}]) == ssl_conn
+    assert WebSockex.Conn.new(regular_uri, regular_opts) == %{tcp_conn | socket_connect_timeout: 123, socket_recv_timeout: 456}
+    assert WebSockex.Conn.new(regular_url, regular_opts) == WebSockex.Conn.new(regular_uri, regular_opts)
 
-    http_uri = URI.parse("http://localhost/ws")
-    assert WebSockex.Conn.new(http_uri, extra_headers: [{"Pineapple", "Cake"}]) == tcp_conn
+    conn_opts = [extra_headers: [{"Pineapple", "Cake"}]]
 
+    ssl_url = "wss://localhost/ws"
+    ssl_uri = URI.parse(ssl_url)
+    assert WebSockex.Conn.new(ssl_uri, conn_opts) == ssl_conn
+    assert WebSockex.Conn.new(ssl_url, conn_opts) == WebSockex.Conn.new(ssl_uri, conn_opts)
 
-    https_uri = URI.parse("https://localhost/ws")
-    assert WebSockex.Conn.new(https_uri, extra_headers: [{"Pineapple", "Cake"}]) == ssl_conn
+    http_url = "http://localhost/ws"
+    http_uri = URI.parse(http_url)
+    assert WebSockex.Conn.new(http_uri, conn_opts) == tcp_conn
+    assert WebSockex.Conn.new(http_url, conn_opts) == WebSockex.Conn.new(http_uri, conn_opts)
 
+    https_url = "https://localhost/ws"
+    https_uri = URI.parse(https_url)
+    assert WebSockex.Conn.new(https_uri, conn_opts) == ssl_conn
+    assert WebSockex.Conn.new(https_url, conn_opts) == WebSockex.Conn.new(https_uri, conn_opts)
 
-    llama = URI.parse("llama://localhost/ws")
-    assert WebSockex.Conn.new(llama, extra_headers: [{"Pineapple", "Cake"}]) ==
+    llama_url = "llama://localhost/ws"
+    llama_conn = URI.parse(llama_url)
+    assert WebSockex.Conn.new(llama_conn, conn_opts) ==
       %WebSockex.Conn{host: "localhost",
                       port: nil,
                       path: "/ws",
@@ -70,6 +81,7 @@ defmodule WebSockex.ConnTest do
                       socket: nil,
                       socket_connect_timeout: 6000,
                       socket_recv_timeout: 5000}
+    assert {:error, %WebSockex.URLError{}} = WebSockex.Conn.new(llama_url, conn_opts)
   end
 
   test "parse_url" do

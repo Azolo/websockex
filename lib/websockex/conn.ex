@@ -69,8 +69,10 @@ defmodule WebSockex.Conn do
   @doc """
   Returns a new `WebSockex.Conn` struct from a uri and options.
   """
-  @spec new(URI.t, [connection_option]) :: __MODULE__.t
-  def new(uri, opts \\ []) do
+  @spec new(url :: String.t | URI.t, [connection_option]) ::
+    __MODULE__.t | {:error, %WebSockex.URLError{}}
+  def new(url, opts \\ [])
+  def new(%URI{} = uri, opts) do
     mod = conn_module(uri.scheme)
 
     %WebSockex.Conn{host: uri.host,
@@ -84,6 +86,12 @@ defmodule WebSockex.Conn do
                     insecure: Keyword.get(opts, :insecure, true),
                     socket_connect_timeout: Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
                     socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default)}
+  end
+  def new(url, opts) do
+    case parse_url(url) do
+      {:ok, %URI{} = uri} -> new(uri, opts)
+      {:error, _} = error -> error
+    end
   end
 
   @doc """
