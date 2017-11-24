@@ -5,7 +5,7 @@
 
 An Elixir Websocket Client.
 
-A simple implemenation would be
+A simple implementation could be
 
 ```elixir
 defmodule WebSocketExample do
@@ -44,6 +44,29 @@ def application do
 end
 ```
 
+## Supervision and Linking
+
+You can start a supervisioned WebSockex connection by using the regular **start_link/3**:
+```elixir
+iex> {:ok, pid} = WebSockex.start_link(url, __MODULE__, state)
+```
+Or an unlinked one with **start/3**:
+```elixir
+iex> {:ok, pid} = WebSockex.start(url, __MODULE__, state)
+```
+*Note* - when using **start/3** from supervised processes there's a possibility of ending up with zombie websockex processes since they're not linked to the calling process, in case the calling process is restarted the websockex process will be unaware of it - in this case you'll usually want to trap exits in order to correctly close the websockex process.
+
+## Tips
+### Terminating with :normal after an Exceptional Close or Error
+
+Usually you'll want to negotiate and handle any abnormal close event or error leading to it, as per WS Spec, but there might be cases where you simply want the socket to exit as if it was a normal event, even if it was abruptly closed or another exception was raised. In those cases you can define the terminate callback and return `exit(:normal)` from it.
+```elixir
+def terminate(reason, state) do
+    IO.puts(\nSocket Terminating:\n#{inspect reason}\n\n#{inspect state}\n")
+    exit(:normal)
+end
+```
+
 ## Debugging
 
 WebSockex supports the debugging mechanism for [OTP Special Processes][special_process] provided through the `:sys` module.
@@ -73,7 +96,7 @@ iex> EchoClient.echo(pid, "Close the things!")
 *DBG* #PID<0.371.0> forcefully closed the connection because the server was taking too long close
 ```
 
-I could also enable tracing after a process has started like this:
+You could also enable tracing after a process has started like this:
 
 ```elixir
 iex> {:ok, pid} = EchoClient.start_link()
