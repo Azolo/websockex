@@ -72,6 +72,26 @@ defmodule WebSockex.ConnTest do
                       socket_recv_timeout: 5000}
   end
 
+  test "parse_url" do
+    assert WebSockex.Conn.parse_url("lemon_pie") ==
+      {:error, %WebSockex.URLError{url: "lemon_pie"}}
+
+    ws_url = "ws://localhost/ws"
+    assert WebSockex.Conn.parse_url(ws_url) == {:ok, URI.parse(ws_url)}
+
+    wss_url = "wss://localhost/ws"
+    assert WebSockex.Conn.parse_url(wss_url) == {:ok, URI.parse(wss_url)}
+
+    http_url = "https://localhost/ws"
+    assert WebSockex.Conn.parse_url(http_url) == {:ok, URI.parse(http_url)}
+
+    https_url = "https://localhost/wss"
+    assert WebSockex.Conn.parse_url(https_url) == {:ok, URI.parse(https_url)}
+
+    pathless_url = "ws://localhost"
+    assert WebSockex.Conn.parse_url(pathless_url) == {:ok, %{URI.parse(pathless_url) | path: "/"}}
+  end
+
   test "open_socket", context do
     %{host: host, port: port, path: path} = context.uri
 

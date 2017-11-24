@@ -3,6 +3,9 @@
 - Allow `:via` and `:global` tuples for named registration. This includes
   handling for `cast/2` and `send_frame/2`.
 - Add access to response headers during `handle_connect/2` via `Conn.resp_headers`.
+- Add `Conn.parse_url/1` to handle url to URI conversion.
+- Automatically add a "/" path to a pathless url.
+  - The HTTP request will break without a valid path!
 
 ### Bug Fixes
 - No longer invoke `handle_disconnect` if there is reason to exit from invoking

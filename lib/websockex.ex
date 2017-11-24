@@ -282,7 +282,7 @@ defmodule WebSockex do
     Utils.spawn(:no_link, conn, module, state, opts)
   end
   def start(url, module, state, opts) do
-    case parse_uri(url) do
+    case WebSockex.Conn.parse_url(url) do
       {:ok, uri} ->
         conn = WebSockex.Conn.new(uri, opts)
         start(conn, module, state, opts)
@@ -309,7 +309,7 @@ defmodule WebSockex do
     Utils.spawn(:link, conn, module, state, opts)
   end
   def start_link(url, module, state, opts) do
-    case parse_uri(url) do
+    case WebSockex.Conn.parse_url(url) do
       {:ok, uri} ->
         conn = WebSockex.Conn.new(uri, opts)
         start_link(conn, module, state, opts)
@@ -939,23 +939,6 @@ defmodule WebSockex do
       :ok
     else
       {:error, %WebSockex.HandshakeError{response: res, challenge: challenge}}
-    end
-  end
-
-  defp parse_uri(url) do
-    case URI.parse(url) do
-      %URI{port: port, scheme: protocol} when protocol in ["ws", "wss"] and is_nil(port) ->
-        # Someone may have deleted the URI config but I'm going to assume it's
-        # just that the application didn't get them registered.
-        {:error, %WebSockex.ApplicationError{reason: :not_started}}
-      # This is confusing to look at. But it's just a match with multiple guards
-      %URI{host: host, port: port, scheme: protocol}
-      when is_nil(host)
-      when is_nil(port)
-      when not protocol in ["ws", "wss"] ->
-        {:error, %WebSockex.URLError{url: url}}
-      %URI{} = uri ->
-        {:ok, uri}
     end
   end
 

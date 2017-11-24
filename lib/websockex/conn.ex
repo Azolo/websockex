@@ -57,7 +57,7 @@ defmodule WebSockex.Conn do
   @type t :: %__MODULE__{conn_mod: :gen_tcp | :ssl,
                          host: String.t,
                          port: non_neg_integer,
-                         path: String.t | nil,
+                         path: String.t,
                          query: String.t | nil,
                          extra_headers: [header],
                          transport: transport,
@@ -84,6 +84,29 @@ defmodule WebSockex.Conn do
                     insecure: Keyword.get(opts, :insecure, true),
                     socket_connect_timeout: Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
                     socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default)}
+  end
+
+  @doc """
+  Parses a url string for a valid URI
+  """
+  @spec parse_url(String.t) :: {:ok, URI.t} | {:error, %WebSockex.URLError{}}
+  def parse_url(url) do
+    case URI.parse(url) do
+      %URI{port: port, scheme: protocol} when protocol in ["ws", "wss"] and is_nil(port) ->
+        # Someone may have deleted the URI config but I'm going to assume it's
+        # just that the application didn't get them registered.
+        {:error, %WebSockex.ApplicationError{reason: :not_started}}
+      # This is confusing to look at. But it's just a match with multiple guards
+      %URI{host: host, port: port, scheme: protocol}
+      when is_nil(host)
+      when is_nil(port)
+      when not protocol in ["ws", "wss", "http", "https"] ->
+        {:error, %WebSockex.URLError{url: url}}
+      %URI{path: nil} = uri ->
+        {:ok, %{uri | path: "/"}}
+      %URI{} = uri ->
+        {:ok, uri}
+    end
   end
 
   @doc """
