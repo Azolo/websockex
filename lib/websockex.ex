@@ -534,6 +534,8 @@ defmodule WebSockex do
             websocket_loop(parent, debug, %{state | buffer: buffer})
           {:tcp_closed, ^socket} ->
             handle_close({:remote, :closed}, parent, debug, state)
+          {:ssl_closed, ^socket} ->
+            handle_close({:remote, :closed}, parent, debug, state)
           {:EXIT, ^parent, reason} ->
             terminate(reason, parent, debug, state)
           msg ->
