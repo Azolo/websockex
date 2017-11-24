@@ -338,10 +338,15 @@ defmodule WebSockex do
   error tuple with a `WebSockex.ConnError` exception struct as the second
   element.
   """
-  @spec send_frame(client, frame) :: :ok | {:error, %WebSockex.FrameEncodeError{}
-                                                  | %WebSockex.ConnError{}
-                                                  | %WebSockex.NotConnectedError{}
-                                                  | %WebSockex.InvalidFrameError{}}
+  @spec send_frame(client, frame) :: :ok |
+    {:error, %WebSockex.FrameEncodeError{}
+      | %WebSockex.ConnError{}
+      | %WebSockex.NotConnectedError{}
+      | %WebSockex.InvalidFrameError{}} |
+    none
+  def send_frame(client, _) when client == self() do
+    raise %WebSockex.CallingSelfError{function: :send_frame}
+  end
   def send_frame(client, frame) do
     try do
       {:ok, res} = :gen.call(client, :"$websockex_send", frame)

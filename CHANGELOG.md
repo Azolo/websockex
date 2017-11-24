@@ -9,6 +9,7 @@
   a callback. (e.g. an exception was raised)
 - Properly handle unexpected SSL socket termination.
   - This _seems_ pretty important, but I don't know...
+- Return a descriptive error when trying to use `send_frame/2` in a callback.
 
 ## 0.4.0
 ### Breaking Changes

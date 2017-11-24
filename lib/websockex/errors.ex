@@ -118,3 +118,18 @@ defmodule WebSockex.NotConnectedError do
     "Not Connected: Currently Opening the Connection."
   end
 end
+
+defmodule WebSockex.CallingSelfError do
+  defexception [:function]
+
+  def message(%__MODULE__{function: :send_frame}) do
+    """
+    Process attempted to call itself.
+
+    The function send_frame/2 cannot be used inside of a callback. Instead try returning {:reply, frame, state} from the callback.
+    """
+  end
+  def message(%__MODULE__{}) do
+    "Process attempted to call itself."
+  end
+end

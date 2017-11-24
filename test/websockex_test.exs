@@ -94,6 +94,9 @@ defmodule WebSockexTest do
     def handle_cast({:send, frame}, state), do: {:reply, frame, state}
     def handle_cast(:close, state), do: {:close, state}
     def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
+    def handle_cast(:self_send, _) do
+      WebSockex.send_frame(self(), :ping)
+    end
     def handle_cast(:delayed_close, state) do
       receive do
         {:tcp_closed, socket} ->
@@ -580,6 +583,15 @@ defmodule WebSockexTest do
 
       assert WebSockex.send_frame(context.pid, {:text, "Test"}) ==
         {:error, %WebSockex.NotConnectedError{connection_state: :opening}}
+    end
+
+    test "returns a descriptive error message for trying to send a frame from self", context do
+      pid = context.pid
+      Process.flag(:trap_exit, true)
+      WebSockex.cast(pid, :self_send)
+
+      assert_receive {:EXIT, ^pid, {%WebSockex.CallingSelfError{} = error, _}}
+      assert Exception.message(error) =~ "try returning {:reply, frame, state} from the callback"
     end
 
     test "returns an error while closing", %{pid: pid} = context do
