@@ -7,6 +7,8 @@
 ### Bug Fixes
 - No longer invoke `handle_disconnect` if there is reason to exit from invoking
   a callback. (e.g. an exception was raised)
+- Properly handle unexpected SSL socket termination.
+  - This _seems_ pretty important, but I don't know...
 
 ## 0.4.0
 ### Breaking Changes
