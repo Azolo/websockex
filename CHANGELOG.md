@@ -7,6 +7,9 @@
 - Allow `Conn.new/2` to use a url string instead of a `URI` struct.
 - Automatically add a "/" path to a pathless url.
   - The HTTP request will break without a valid path!
+- Add `child_spec` definitions for Elixir 1.5+
+  - Or any version that exports `Supervisor.child_spec/2`
+- Some documentation tweaks
 
 ### Bug Fixes
 - No longer invoke `handle_disconnect` if there is reason to exit from invoking
