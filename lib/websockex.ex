@@ -214,9 +214,31 @@ defmodule WebSockex do
 
   @optional_callbacks format_status: 2
 
-  defmacro __using__(_) do
+  defmacro __using__(opts) do
     quote location: :keep do
       @behaviour WebSockex
+
+      if Kernel.function_exported?(Supervisor, :child_spec, 2) do
+        @doc false
+        def child_spec(conn_info, state) do
+          %{
+            id: __MODULE__,
+            start: {__MODULE__, :start_link, [conn_info, state]}
+          }
+          |> Supervisor.child_spec(unquote(Macro.escape(opts)))
+        end
+
+        @doc false
+        def child_spec(state) do
+          %{
+            id: __MODULE__,
+            start: {__MODULE__, :start_link, [state]}
+          }
+          |> Supervisor.child_spec(unquote(Macro.escape(opts)))
+        end
+
+        defoverridable child_spec: 2, child_spec: 1
+      end
 
       @doc false
       def handle_connect(_conn, state) do

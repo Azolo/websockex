@@ -1405,4 +1405,35 @@ defmodule WebSockexTest do
     # A second data tuple means pretty output for `:observer`. Who knew?
     assert {:data, _data} = List.keyfind(rest, :data, 0)
   end
+
+  if Kernel.function_exported?(Supervisor, :child_spec, 2) do
+    describe "child_spec" do
+      test "child_spec/2" do
+        assert %{id: TestClient, start: {TestClient, :start_link, ["url", :state]}} =
+          TestClient.child_spec("url", :state)
+      end
+
+      test "child_spec/1" do
+        assert %{id: TestClient, start: {TestClient, :start_link, [:state]}} =
+          TestClient.child_spec(:state)
+      end
+    end
+
+    test "child_spec is overridable" do
+      defmodule ChildSpecTest do
+        use WebSockex
+
+        def child_spec(_state) do
+          "hippo"
+        end
+
+        def child_spec(_conn, _state) do
+          "llama"
+        end
+      end
+
+      assert ChildSpecTest.child_spec(1, 2) == "llama"
+      assert ChildSpecTest.child_spec(1) == "hippo"
+    end
+  end
 end
