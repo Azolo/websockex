@@ -49,6 +49,21 @@ def application do
 end
 ```
 
+## Why WebSockex?
+
+WebSockex was conceived after trying other libraries and realizing that I needed something tested, that actually
+implemented the spec, provided information about the connection, and could fit into a supervision tree. There was
+nothing that really fit into all those categories, so WebSockex was created.
+
+There are other libraries out there can fit into some of the categories, but I consider WebSockex the best option if
+you want a callback inspired approach where most of the protocol workings are abstracted out of your way.
+
+If you are afraid that WebSockex isn't stable enough or have some other problem with it that you don't feel like
+telling me about, then I would suggest the excellent [`gun` library][gun_hex]. It's a bit harder to use, and requires
+some knowledge of the spec. However it is an excellent library.
+
+[gun_hex]: https://hex.pm/packages/gun
+
 ## Supervision and Linking
 
 A WebSockex based process is a easily able to fit into any supervision tree. It supports all the necessary capabilites
