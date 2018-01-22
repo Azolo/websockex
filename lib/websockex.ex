@@ -20,6 +20,11 @@ defmodule WebSockex do
       IO.puts "Received a message: #{msg}"
       {:ok, state}
     end
+
+    def handle_cast({:send, {type, msg} = frame}, state) do
+      IO.puts "Sending #{type} frame with payload: #{msg}"
+      {:reply, frame, state}
+    end
   end
   ```
   """
