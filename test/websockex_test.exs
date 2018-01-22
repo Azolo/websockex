@@ -934,6 +934,31 @@ defmodule WebSockexTest do
 
       assert_receive :normal_close_terminate
     end
+
+    test "does not catch exits", %{pid: orig_pid} = context do
+      defmodule TerminateClient do
+        use WebSockex
+        def start(url, state, opts \\ []) do
+          WebSockex.start(url, __MODULE__, state, opts)
+        end
+
+        def terminate(:test_reason, _state) do
+          exit(:normal)
+        end
+      end
+
+      Process.unlink(orig_pid)
+      ref = Process.monitor(orig_pid)
+
+      :sys.terminate(orig_pid, :test_reason)
+      assert_receive {:DOWN, ^ref, :process, ^orig_pid, :test_reason}
+
+      {:ok, pid} = TerminateClient.start(context.url, %{})
+      ref = Process.monitor(pid)
+
+      :sys.terminate(pid, :test_reason)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
+    end
   end
 
   describe "handle_ping callback" do
@@ -1379,30 +1404,5 @@ defmodule WebSockexTest do
 
     # A second data tuple means pretty output for `:observer`. Who knew?
     assert {:data, _data} = List.keyfind(rest, :data, 0)
-  end
-
-  test "can exit from terminate", %{pid: orig_pid} = context do
-    defmodule TerminateClient do
-      use WebSockex
-      def start(url, state, opts \\ []) do
-        WebSockex.start(url, __MODULE__, state, opts)
-      end
-
-      def terminate(:test_reason, _state) do
-        exit(:normal)
-      end
-    end
-    
-    Process.unlink(orig_pid)
-    ref = Process.monitor(orig_pid)
-
-    :sys.terminate(orig_pid, :test_reason)
-    assert_receive {:DOWN, ^ref, :process, ^orig_pid, :test_reason}
-
-    {:ok, pid} = TerminateClient.start(context.url, %{})
-    ref = Process.monitor(pid)
-
-    :sys.terminate(pid, :test_reason)
-    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
   end
 end
