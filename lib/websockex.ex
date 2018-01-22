@@ -27,6 +27,22 @@ defmodule WebSockex do
     end
   end
   ```
+
+  ## Supervision
+
+  WebSockex is implemented as an OTP Special Process and as a result will fit
+  into supervision trees.
+
+  WebSockex also supports the Supervisor children format introduced in Elixir
+  1.5. Meaning that a child specification could be `{ClientModule, [state]}`.
+
+  However, since there is a possibility that you would like to provide a
+  `t:WebSockex.Conn/0` or a url as well as the state, there are two versions of
+  the `child_spec` function. If you need functionality beyond that it is
+  recommended that you override the function or define your own.
+
+  Just remember to use the version that corresponds with your `start_link`'s
+  arity.
   """
 
   @type client :: pid | :atom | {:via, module, atom}

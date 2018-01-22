@@ -51,15 +51,47 @@ end
 
 ## Supervision and Linking
 
-You can start a supervisioned WebSockex connection by using the regular **start_link/3**:
+A WebSockex based process is a easily able to fit into any supervision tree. It supports all the necessary capabilites
+to do so. In addition, it supports the `Supervisor` children format introduced in Elixir 1.5. So in any version of
+Elixir after 1.5, you can simply do:
+
+```elixir
+defmodule MyApp.Client do
+  use WebSockex
+
+  def start_link(state) do
+    WebSockex.start_link("ws://myapp.ninja", __MODULE__, state)
+  end
+end
+
+defmodule MyApp.Application do
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      {MyApp.Client, ["WebSockex is Great"]}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one)
+  end
+end
+```
+
+See the Supervision section in the `WebSockex` module documentation for more details on how this works.
+
+WebSockex also supports both linked(`start_link/3`) and unlinked(`start/3`) processes.
+
 ```elixir
 iex> {:ok, pid} = WebSockex.start_link(url, __MODULE__, state)
-```
-Or an unlinked one with **start/3**:
-```elixir
 iex> {:ok, pid} = WebSockex.start(url, __MODULE__, state)
 ```
-*Note* - when using **start/3** from supervised processes there's a possibility of ending up with zombie websockex processes since they're not linked to the calling process, in case the calling process is restarted the websockex process will be unaware of it - in this case you'll usually want to trap exits in order to correctly close the websockex process.
+
+However, the recommendation is to always use `start_link/3` and if necessary trap exits.
+
+This is because `start/3` creates a detached process and has the capability to produce zombie processes outside of any
+application tree. This is generally a good piece of advice for any process, however since a module using WebSockex
+bevhaviour can be written as a self-sustaining tcp connection. I feel like it is even more important to express this
+particular piece of advice here.
 
 ## Tips
 ### Terminating with :normal after an Exceptional Close or Error
