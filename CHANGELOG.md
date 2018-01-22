@@ -1,4 +1,4 @@
-## Unreleased
+## 0.4.1
 ### Enhancements
 - Allow `:via` and `:global` tuples for named registration. This includes
   handling for `cast/2` and `send_frame/2`.
