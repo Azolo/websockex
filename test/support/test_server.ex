@@ -1,4 +1,5 @@
 defmodule WebSockex.TestServer do
+  Module.register_attribute(__MODULE__, :dialyzer, persist: true)
   use Plug.Router
 
   @certfile Path.join([__DIR__, "priv", "websockex.cer"])
@@ -167,6 +168,7 @@ defmodule WebSockex.TestSocket do
   end
   def websocket_info(_, req, state), do: {:ok, req, state}
 
+  @dialyzer {:nowarn_function, immediate_reply: 1}
   defp immediate_reply(req) do
     socket = elem(req, 1)
     transport = elem(req, 2)
