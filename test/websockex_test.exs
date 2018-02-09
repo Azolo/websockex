@@ -132,6 +132,7 @@ defmodule WebSockexTest do
     def handle_ping({:ping, "Bad Reply"}, _), do: :lemon_pie
     def handle_ping({:ping, "Error"}, _), do: raise "Ping Error"
     def handle_ping({:ping, "Exit"}, _), do: exit "Ping Exit"
+    def handle_ping({:ping, "Please Reply"}, state), do: {:reply, {:pong, "No"}, state}
     def handle_ping(frame, state), do: super(frame, state)
 
     # Implicitly test default implementation defined with using through super
@@ -146,6 +147,7 @@ defmodule WebSockexTest do
     def handle_pong({:pong, "Bad Reply"}, _), do: :lemon_pie
     def handle_pong({:pong, "Error"}, _), do: raise "Pong Error"
     def handle_pong({:pong, "Exit"}, _), do: exit "Pong Exit"
+    def handle_pong({:pong, "Please Reply"}, state), do: {:reply, {:text, "No"}, state}
 
     def handle_frame({:binary, msg}, %{catch_binary: pid} = state) do
       send(pid, {:caught_binary, msg})
@@ -155,6 +157,7 @@ defmodule WebSockexTest do
       send(pid, {:caught_text, msg})
       {:ok, state}
     end
+    def handle_frame({:text, "Please Reply"}, state), do: {:reply, {:text, "No"}, state}
     def handle_frame({:text, "Bad Reply"}, _), do: :lemon_pie
     def handle_frame({:text, "Error"}, _), do: raise "Frame Error"
     def handle_frame({:text, "Exit"}, _), do: exit "Frame Exit"
@@ -642,6 +645,22 @@ defmodule WebSockexTest do
       assert_receive {1011, ""}
       assert_receive {:EXIT, _, %WebSockex.InvalidFrameError{}}
     end
+
+    test "handles dead connections when replying", context do
+      Process.flag(:trap_exit, true)
+      %{socket: socket} = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      WebSockex.cast(context.pid, {:send, {:text, "It's Closed"}})
+      :gen_tcp.shutdown(socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_received :caught_disconnect
+    end
   end
 
   describe "handle_connect callback" do
@@ -677,6 +696,24 @@ defmodule WebSockexTest do
 
       assert_receive {:caught_text, ^text}
     end
+
+    test "handles dead connections when replying", context do
+      Process.flag(:trap_exit, true)
+      conn = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      frame = <<1::1, 0::3, 1::4, 0::1, 12::7, "Please Reply"::utf8>>
+      send(context.pid, {conn.transport, conn.socket, frame})
+
+      :gen_tcp.shutdown(conn.socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_received :caught_disconnect
+    end
   end
 
   describe "handle_info callback" do
@@ -705,6 +742,22 @@ defmodule WebSockexTest do
 
       assert_receive {:EXIT, _, {:local, 4012, "Test Close"}}
       assert_receive {4012, "Test Close"}
+    end
+
+    test "handles dead connections when replying", context do
+      Process.flag(:trap_exit, true)
+      %{socket: socket} = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      send(context.pid, {:send, {:text, "It's Closed"}})
+      :gen_tcp.shutdown(socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_received :caught_disconnect
     end
   end
 
@@ -973,6 +1026,24 @@ defmodule WebSockexTest do
 
       assert_receive :received_payload_pong
     end
+
+    test "handles dead connections when replying", context do
+      Process.flag(:trap_exit, true)
+      conn = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      frame = <<1::1, 0::3, 9::4, 0::1, 12::7, "Please Reply"::utf8>>
+      send(context.pid, {conn.transport, conn.socket, frame})
+
+      :gen_tcp.shutdown(conn.socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_received :caught_disconnect
+    end
   end
 
   describe "handle_pong callback" do
@@ -988,6 +1059,24 @@ defmodule WebSockexTest do
       WebSockex.cast(context.pid, {:send, {:ping, "bananas"}})
 
       assert_receive {:caught_payload_pong, "bananas"}
+    end
+
+    test "handles dead connections when replying", context do
+      Process.flag(:trap_exit, true)
+      conn = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      frame = <<1::1, 0::3, 10::4, 0::1, 12::7, "Please Reply"::utf8>>
+      send(context.pid, {conn.transport, conn.socket, frame})
+
+      :gen_tcp.shutdown(conn.socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_received :caught_disconnect
     end
   end
 

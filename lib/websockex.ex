@@ -701,7 +701,7 @@ defmodule WebSockex do
       {:reply, frame, new_state} ->
         # A `with` that includes `else` clause isn't tail recursive (elixir-lang/elixir#6251)
         res = with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
-              do: :ok = WebSockex.Conn.socket_send(state.conn, binary_frame)
+              do: WebSockex.Conn.socket_send(state.conn, binary_frame)
         case res do
           :ok ->
             debug = Utils.sys_debug(debug, {:reply, function, frame}, state)
