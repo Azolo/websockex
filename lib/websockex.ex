@@ -47,8 +47,10 @@ defmodule WebSockex do
 
   @type client :: pid | :atom | {:via, module, atom}
 
-  @type frame :: {:ping | :ping, nil | message :: binary}
-                 | {:text | :binary, message :: binary}
+  @type frame ::
+          {:ping | :ping, nil | message :: binary}
+          | {:pong | :pong, nil | message :: binary}
+          | {:text | :binary, message :: binary}
 
   @typedoc """
   The frame sent when the negotiating a connection closure.
