@@ -170,8 +170,8 @@ defmodule WebSockex do
   @doc """
   Invoked when the WebSocket disconnects from the server.
 
-  This callback is only invoked in the even of a connection failure. In cases
-  of crashes or other errors then the process will terminate immediately
+  This callback is only invoked in the event of a connection failure. In cases
+  of crashes or other errors the process will terminate immediately
   skipping this callback.
 
   If the `handle_initial_conn_failure: true` option is provided during process
@@ -225,7 +225,7 @@ defmodule WebSockex do
     | {:error, reason :: term}
 
   @doc """
-  Invoked to to retrieve a formatted status of the state in a WebSockex process.
+  Invoked to retrieve a formatted status of the state in a WebSockex process.
 
   This optional callback is used when you want to edit the values returned when
   invoking `:sys.get_status`.
