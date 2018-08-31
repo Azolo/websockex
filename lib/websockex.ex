@@ -678,7 +678,7 @@ defmodule WebSockex do
         :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :closing}})
         close_loop(reason, parent, debug, state)
 
-      {:tcp_closed, ^socket} ->
+      {close_mod, ^socket} when close_mod in [:tcp_closed, :ssl_closed] ->
         new_conn = %{conn | socket: nil}
         debug = Utils.sys_debug(debug, :closed, state)
         purge_timer(timer_ref, :websockex_close_timeout)

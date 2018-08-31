@@ -8,6 +8,7 @@ defmodule WebSockexTest do
   end
 
   @basic_server_frame <<1::1, 0::3, 1::4, 0::1, 5::7, "Hello"::utf8>>
+  @close_frame_with_error <<1::1, 0::3, 8::4, 0::1, 2::7, 1001::16>>
 
   defmodule TestClient do
     use WebSockex
@@ -1142,6 +1143,33 @@ defmodule WebSockexTest do
       Process.unlink(context.pid)
       Process.monitor(context.pid)
       TestClient.catch_attr(context.pid, :disconnect, self())
+    end
+
+    test "can handle a ssl socket closing during the close loop", context do
+      # Close the original socket
+      WebSockex.cast(context.pid, :close)
+      assert_receive {:DOWN, _ref, :process, _, :normal}
+      assert_receive :normal_remote_closed
+      assert_receive :caught_disconnect
+
+      # Test HTTPS
+      {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+      on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+
+      {:ok, pid} = TestClient.start_link(url, %{})
+      Process.unlink(pid)
+      Process.monitor(pid)
+      TestClient.catch_attr(pid, :disconnect, self())
+
+      conn = TestClient.get_conn(pid)
+
+      # Ranch/Cowboy closes the tcp connection instead sending an :ssl close
+      # So we're going to fake closing just the `:ssl` connection
+      send(pid, {conn.transport, conn.socket, @close_frame_with_error})
+      send(pid, {:ssl_closed, conn.socket})
+
+      assert_receive {:DOWN, _ref, :process, ^pid, {:remote, 1001, ""}}
+      assert_receive {:caught_disconnect, 1001, ""}
     end
 
     test "is not invoked when there is an exception during runtime", context do
