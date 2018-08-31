@@ -605,10 +605,15 @@ defmodule WebSockexTest do
       # Really glad that I got those sys behaviors now
       :sys.suspend(pid)
 
+      test_pid = self()
+
       task =
         Task.async(fn ->
+          send(test_pid, :task_started)
           WebSockex.send_frame(pid, {:text, "hello"})
         end)
+
+      assert_receive :task_started
 
       :gen_tcp.shutdown(conn.socket, :write)
 
