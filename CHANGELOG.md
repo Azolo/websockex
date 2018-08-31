@@ -1,3 +1,7 @@
+## In Git
+### Bug Fixes
+- Fix `pong` frame not being a correct return type in spec
+
 ## 0.4.1
 ### Enhancements
 - Allow `:via` and `:global` tuples for named registration. This includes
