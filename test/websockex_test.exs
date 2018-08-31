@@ -711,7 +711,7 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
       assert_received :caught_disconnect
     end
   end
@@ -809,7 +809,7 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{original: :closed}}
+      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
       assert_received :caught_disconnect
     end
   end
