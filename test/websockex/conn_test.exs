@@ -4,7 +4,7 @@ defmodule WebSockex.ConnTest do
   setup do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
 
-    on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+    on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
     uri = URI.parse(url)
 
@@ -26,7 +26,8 @@ defmodule WebSockex.ConnTest do
       extra_headers: [{"Pineapple", "Cake"}],
       socket: nil,
       socket_connect_timeout: 6000,
-      socket_recv_timeout: 5000}
+      socket_recv_timeout: 5000
+    }
 
     ssl_conn = %WebSockex.Conn{
       host: "localhost",
@@ -38,18 +39,26 @@ defmodule WebSockex.ConnTest do
       extra_headers: [{"Pineapple", "Cake"}],
       socket: nil,
       socket_connect_timeout: 6000,
-      socket_recv_timeout: 5000}
+      socket_recv_timeout: 5000
+    }
 
     regular_url = "ws://localhost/ws"
     regular_uri = URI.parse(regular_url)
+
     regular_opts = [
       extra_headers: [{"Pineapple", "Cake"}],
       socket_connect_timeout: 123,
-      socket_recv_timeout: 456\
+      socket_recv_timeout: 456
     ]
 
-    assert WebSockex.Conn.new(regular_uri, regular_opts) == %{tcp_conn | socket_connect_timeout: 123, socket_recv_timeout: 456}
-    assert WebSockex.Conn.new(regular_url, regular_opts) == WebSockex.Conn.new(regular_uri, regular_opts)
+    assert WebSockex.Conn.new(regular_uri, regular_opts) == %{
+             tcp_conn
+             | socket_connect_timeout: 123,
+               socket_recv_timeout: 456
+           }
+
+    assert WebSockex.Conn.new(regular_url, regular_opts) ==
+             WebSockex.Conn.new(regular_uri, regular_opts)
 
     conn_opts = [extra_headers: [{"Pineapple", "Cake"}]]
 
@@ -70,23 +79,27 @@ defmodule WebSockex.ConnTest do
 
     llama_url = "llama://localhost/ws"
     llama_conn = URI.parse(llama_url)
+
     assert WebSockex.Conn.new(llama_conn, conn_opts) ==
-      %WebSockex.Conn{host: "localhost",
-                      port: nil,
-                      path: "/ws",
-                      query: nil,
-                      conn_mod: nil,
-                      transport: nil,
-                      extra_headers: [{"Pineapple", "Cake"}],
-                      socket: nil,
-                      socket_connect_timeout: 6000,
-                      socket_recv_timeout: 5000}
+             %WebSockex.Conn{
+               host: "localhost",
+               port: nil,
+               path: "/ws",
+               query: nil,
+               conn_mod: nil,
+               transport: nil,
+               extra_headers: [{"Pineapple", "Cake"}],
+               socket: nil,
+               socket_connect_timeout: 6000,
+               socket_recv_timeout: 5000
+             }
+
     assert {:error, %WebSockex.URLError{}} = WebSockex.Conn.new(llama_url, conn_opts)
   end
 
   test "parse_url" do
     assert WebSockex.Conn.parse_url("lemon_pie") ==
-      {:error, %WebSockex.URLError{url: "lemon_pie"}}
+             {:error, %WebSockex.URLError{url: "lemon_pie"}}
 
     ws_url = "ws://localhost/ws"
     assert WebSockex.Conn.parse_url(ws_url) == {:ok, URI.parse(ws_url)}
@@ -107,9 +120,8 @@ defmodule WebSockex.ConnTest do
   test "open_socket", context do
     %{host: host, port: port, path: path} = context.uri
 
-    assert {:ok,
-      %WebSockex.Conn{host: ^host, port: ^port, path: ^path, socket: _}} =
-        WebSockex.Conn.open_socket(context.conn)
+    assert {:ok, %WebSockex.Conn{host: ^host, port: ^port, path: ^path, socket: _}} =
+             WebSockex.Conn.open_socket(context.conn)
   end
 
   test "open_socket with bad path", context do
@@ -120,35 +132,39 @@ defmodule WebSockex.ConnTest do
     :ok = WebSockex.Conn.socket_send(conn, request)
 
     assert WebSockex.Conn.handle_response(conn) ==
-      {:error, %WebSockex.RequestError{code: 400, message: "Bad Request"}}
+             {:error, %WebSockex.RequestError{code: 400, message: "Bad Request"}}
   end
 
   describe "secure connection" do
     setup do
       {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
 
-      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+      on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
       uri = URI.parse(url)
 
-      {:ok, conn} = WebSockex.Conn.new(uri) |> WebSockex.Conn.open_socket
+      {:ok, conn} = WebSockex.Conn.new(uri) |> WebSockex.Conn.open_socket()
 
       [url: url, uri: uri, conn: conn]
     end
 
     test "open_socket with supplied cacerts", context do
-      conn = WebSockex.Conn.new(context.uri, [insecure: false,
-                                              cacerts: WebSockex.TestServer.cacerts()])
+      conn =
+        WebSockex.Conn.new(
+          context.uri,
+          insecure: false,
+          cacerts: WebSockex.TestServer.cacerts()
+        )
 
       assert {:ok, %WebSockex.Conn{conn_mod: :ssl, transport: :ssl, insecure: false}} =
-        WebSockex.Conn.open_socket(conn)
+               WebSockex.Conn.open_socket(conn)
     end
 
     test "open_socket with insecure flag", context do
       conn = WebSockex.Conn.new(context.uri, insecure: true)
 
       assert {:ok, %WebSockex.Conn{conn_mod: :ssl, transport: :ssl, insecure: true}} =
-        WebSockex.Conn.open_socket(conn)
+               WebSockex.Conn.open_socket(conn)
     end
 
     test "close_socket", context do
@@ -156,7 +172,7 @@ defmodule WebSockex.ConnTest do
 
       assert {:ok, _} = :ssl.sockname(socket)
       assert WebSockex.Conn.close_socket(context.conn) == %{context.conn | socket: nil}
-      Process.sleep 50
+      Process.sleep(50)
       assert {:error, _} = :ssl.sockname(socket)
     end
   end
@@ -187,7 +203,7 @@ defmodule WebSockex.ConnTest do
 
     test "works on wss connections" do
       {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
-      on_exit fn -> WebSockex.TestServer.shutdown(server_ref) end
+      on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
       uri = URI.parse(url)
       conn = WebSockex.Conn.new(uri)
       {:ok, conn} = WebSockex.Conn.open_socket(conn)
@@ -209,15 +225,18 @@ defmodule WebSockex.ConnTest do
   test "socket_send returns a send error when fails to send", %{conn: conn} do
     socket = conn.socket
     :ok = conn.conn_mod.close(socket)
+
     assert WebSockex.Conn.socket_send(conn, "Gonna Fail") ==
-      {:error, %WebSockex.ConnError{original: :closed}}
+             {:error, %WebSockex.ConnError{original: :closed}}
   end
 
   test "build_request" do
-    conn = %WebSockex.Conn{host: "lime.com",
-                           path: "/coco",
-                           query: "nut=true",
-                           extra_headers: [{"X-Test", "Shoes"}]}
+    conn = %WebSockex.Conn{
+      host: "lime.com",
+      path: "/coco",
+      query: "nut=true",
+      extra_headers: [{"X-Test", "Shoes"}]
+    }
 
     {:ok, request} = WebSockex.Conn.build_request(conn, "pants")
 

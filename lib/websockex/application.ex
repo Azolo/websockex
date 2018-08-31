@@ -11,6 +11,6 @@ defmodule WebSockex.Application do
     unless URI.default_port("wss"), do: URI.default_port("wss", 443)
 
     # Start an empty supervisor for OTP
-    Supervisor.start_link([], [strategy: :one_for_one, name: WebSockex.Supervisor])
+    Supervisor.start_link([], strategy: :one_for_one, name: WebSockex.Supervisor)
   end
 end
