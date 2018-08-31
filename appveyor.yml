@@ -1,7 +1,10 @@
 version: appveyor-{build}
 
 environment:
- elixir_version: 1.6.0
+  matrix:
+    - elixir_version: 1.7.3
+    - elixir_version: 1.6.6
+    - elixir_version: 1.5.3
 
 install:
   - cinst elixir --version %elixir_version%
@@ -13,4 +16,4 @@ build_script:
   - mix deps.get
 
 test_script:
-  mix test
+  - mix test
