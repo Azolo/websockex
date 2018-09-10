@@ -175,6 +175,18 @@ defmodule WebSockex.ConnTest do
       Process.sleep(50)
       assert {:error, _} = :ssl.sockname(socket)
     end
+
+    test "open_socket with custom ssl options", context do
+      ssl_options = [cacertfile: Path.join([__DIR__, "..", "support", "priv", "websockexca.cer"])]
+      conn = WebSockex.Conn.new(context.uri, ssl_options: ssl_options)
+
+      assert {:ok,
+              %WebSockex.Conn{
+                conn_mod: :ssl,
+                transport: :ssl,
+                ssl_options: ^ssl_options
+              }} = WebSockex.Conn.open_socket(conn)
+    end
   end
 
   test "close_socket", context do
