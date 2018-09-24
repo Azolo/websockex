@@ -22,7 +22,8 @@ defmodule WebSockex.Conn do
             socket_recv_timeout: @socket_recv_timeout_default,
             cacerts: nil,
             insecure: true,
-            resp_headers: []
+            resp_headers: [],
+            ssl_options: nil
 
   @type socket :: :gen_tcp.socket() | :ssl.sslsocket()
   @type header :: {field :: String.t(), value :: String.t()}
@@ -91,7 +92,8 @@ defmodule WebSockex.Conn do
       insecure: Keyword.get(opts, :insecure, true),
       socket_connect_timeout:
         Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
-      socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default)
+      socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
+      ssl_options: Keyword.get(opts, :ssl_options, nil)
     }
   end
 
@@ -314,6 +316,15 @@ defmodule WebSockex.Conn do
   end
 
   # Crazy SSL Stuff (It will be normal SSL stuff when I figure out Erlang's ssl)
+
+  defp ssl_connection_options(%{ssl_options: ssl_options}) when not is_nil(ssl_options) do
+    [
+      mode: :binary,
+      active: false,
+      packet: 0
+    ]
+    |> Keyword.merge(ssl_options)
+  end
 
   defp ssl_connection_options(%{insecure: true}) do
     [
