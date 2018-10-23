@@ -45,7 +45,7 @@ defmodule WebSockex do
   arity.
   """
 
-  @type client :: pid | :atom | {:via, module, atom}
+  @type client :: pid | atom | {:via, module, term} | {:global, term}
 
   @type frame ::
           :ping
@@ -92,6 +92,7 @@ defmodule WebSockex do
     callback is always invoked if an established connection is lost.
   - `:debug` - Options to set the debug options for `:sys.handle_debug`.
   - `:name` - An atom that the registers the process with name locally.
+    Can also be a `{:via, module, term}` or `{:global, term}` tuple.
 
   Other possible option values include: `t:WebSockex.Conn.connection_option/0`
   """
@@ -99,7 +100,7 @@ defmodule WebSockex do
           WebSockex.Conn.connection_option()
           | {:async, boolean}
           | {:debug, debug_opts}
-          | {:name, atom}
+          | {:name, atom | {:global, term} | {:via, module, term}}
           | {:handle_initial_conn_failure, boolean}
 
   @typedoc """
