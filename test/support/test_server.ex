@@ -51,7 +51,7 @@ defmodule WebSockex.TestServer do
 
       {:error, :eaddrinuse} ->
         require Logger
-        Logger.error("Address #{port} in use!")
+        _ = Logger.error("Address #{port} in use!")
         start_https(pid)
     end
   end
@@ -76,7 +76,7 @@ defmodule WebSockex.TestServer do
   end
 
   defp get_port do
-    unless Process.whereis(__MODULE__), do: start_ports_agent()
+    _ = unless Process.whereis(__MODULE__), do: start_ports_agent()
 
     Agent.get_and_update(__MODULE__, fn port -> {port, port + 1} end)
   end
@@ -95,7 +95,7 @@ defmodule WebSockex.TestSocket do
         {:cowboy_websocket, req, state}
 
       int when is_integer(int) ->
-        :cowboy_req.reply(int, req)
+        _ = :cowboy_req.reply(int, req)
         {:shutdown, req, :tests_are_fun}
 
       :connection_wait ->
