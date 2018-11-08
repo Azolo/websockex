@@ -207,11 +207,7 @@ defmodule WebSockex do
   Invoked when the Websocket receives a ping frame
   """
   @callback handle_ping(ping_frame :: :ping | {:ping, binary}, state :: term) ::
-              {:ok, new_state}
-              | {:reply, frame, new_state}
-              | {:close, new_state}
-              | {:close, close_frame, new_state}
-            when new_state: term
+              {:reply, :pong | {:pong, term}, term}
 
   @doc """
   Invoked when the Websocket receives a pong frame.
@@ -292,7 +288,7 @@ defmodule WebSockex do
       @doc false
       def handle_info(message, state) do
         require Logger
-        Logger.error("No handle_info/2 clause in #{__MODULE__} provided for #{inspect(message)}")
+        _ = Logger.error("No handle_info/2 clause in #{__MODULE__} provided for #{inspect(message)}")
         {:ok, state}
       end
 
