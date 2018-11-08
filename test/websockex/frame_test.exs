@@ -218,8 +218,7 @@ defmodule WebSockex.FrameTest do
       frame = <<0::1, 0::3, 9::4, 0::1, 0::7>>
 
       assert Frame.parse_frame(frame) ==
-               {:error,
-                %WebSockex.FrameError{reason: :nonfin_control_frame, opcode: :ping, buffer: frame}}
+               {:error, %WebSockex.FrameError{reason: :nonfin_control_frame, opcode: :ping, buffer: frame}}
     end
 
     test "large control frames return an error" do
@@ -248,24 +247,21 @@ defmodule WebSockex.FrameTest do
       frame = <<1::1, 0::3, 8::4, 0::1, 7::7, 5000::16, "Hello">>
 
       assert Frame.parse_frame(frame) ==
-               {:error,
-                %WebSockex.FrameError{reason: :invalid_close_code, opcode: :close, buffer: frame}}
+               {:error, %WebSockex.FrameError{reason: :invalid_close_code, opcode: :close, buffer: frame}}
     end
 
     test "Text Frames check for valid UTF-8" do
       frame = <<1::1, 0::3, 1::4, 0::1, 7::7, 0xFFFF::16, "Hello"::utf8>>
 
       assert Frame.parse_frame(frame) ==
-               {:error,
-                %WebSockex.FrameError{reason: :invalid_utf8, opcode: :text, buffer: frame}}
+               {:error, %WebSockex.FrameError{reason: :invalid_utf8, opcode: :text, buffer: frame}}
     end
 
     test "Close Frames with payloads check for valid UTF-8" do
       frame = <<1::1, 0::3, 8::4, 0::1, 9::7, 1000::16, 0xFFFF::16, "Hello"::utf8>>
 
       assert Frame.parse_frame(frame) ==
-               {:error,
-                %WebSockex.FrameError{reason: :invalid_utf8, opcode: :close, buffer: frame}}
+               {:error, %WebSockex.FrameError{reason: :invalid_utf8, opcode: :close, buffer: frame}}
     end
   end
 
@@ -302,8 +298,7 @@ defmodule WebSockex.FrameTest do
       <<part::binary-size(4), rest::binary>> = frame
 
       assert Frame.parse_fragment({:fragment, :text, part}, {:finish, rest}) ==
-               {:error,
-                %WebSockex.FrameError{reason: :invalid_utf8, opcode: :text, buffer: frame}}
+               {:error, %WebSockex.FrameError{reason: :invalid_utf8, opcode: :text, buffer: frame}}
     end
 
     test "Applies a continuation to a binary fragment" do
@@ -315,9 +310,7 @@ defmodule WebSockex.FrameTest do
 
     test "Finishes a binary fragment" do
       <<part::binary-size(3), rest::binary>> = @binary
-
-      assert Frame.parse_fragment({:fragment, :binary, part}, {:finish, rest}) ==
-               {:ok, {:binary, @binary}}
+      assert Frame.parse_fragment({:fragment, :binary, part}, {:finish, rest}) == {:ok, {:binary, @binary}}
     end
   end
 
@@ -331,8 +324,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 9::4, 1::1, ^len::7, mask::bytes-size(4),
-                masked_payload::binary-size(len)>>} = Frame.encode_frame({:ping, payload})
+              <<1::1, 0::3, 9::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>} =
+               Frame.encode_frame({:ping, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -346,8 +339,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 10::4, 1::1, ^len::7, mask::bytes-size(4),
-                masked_payload::binary-size(len)>>} = Frame.encode_frame({:pong, payload})
+              <<1::1, 0::3, 10::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>} =
+               Frame.encode_frame({:pong, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -361,8 +354,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(<<1000::16, payload::binary>>)
 
       assert {:ok,
-              <<1::1, 0::3, 8::4, 1::1, ^len::7, mask::bytes-size(4),
-                masked_payload::binary-size(len)>>} = Frame.encode_frame({:close, 1000, payload})
+              <<1::1, 0::3, 8::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary-size(len)>>} =
+               Frame.encode_frame({:close, 1000, payload})
 
       assert unmask(mask, masked_payload) == <<1000::16, payload::binary>>
     end
@@ -413,8 +406,7 @@ defmodule WebSockex.FrameTest do
       payload = "Lemon Pies are Pies."
       len = byte_size(payload)
 
-      assert {:ok,
-              <<1::1, 0::3, 1::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+      assert {:ok, <<1::1, 0::3, 1::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
                Frame.encode_frame({:text, payload})
 
       assert unmask(mask, masked_payload) == payload
@@ -425,8 +417,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 1::4, 1::1, 126::7, ^len::16, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:text, payload})
+              <<1::1, 0::3, 1::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:text, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -436,8 +428,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 1::4, 1::1, 127::7, ^len::64, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:text, payload})
+              <<1::1, 0::3, 1::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:text, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -446,8 +438,7 @@ defmodule WebSockex.FrameTest do
       payload = @binary
       len = byte_size(payload)
 
-      assert {:ok,
-              <<1::1, 0::3, 2::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+      assert {:ok, <<1::1, 0::3, 2::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
                Frame.encode_frame({:binary, payload})
 
       assert unmask(mask, masked_payload) == payload
@@ -458,8 +449,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 2::4, 1::1, 126::7, ^len::16, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:binary, payload})
+              <<1::1, 0::3, 2::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:binary, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -469,8 +460,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 2::4, 1::1, 127::7, ^len::64, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:binary, payload})
+              <<1::1, 0::3, 2::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:binary, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -479,8 +470,7 @@ defmodule WebSockex.FrameTest do
       payload = "Lemon Pies are Pies."
       len = byte_size(payload)
 
-      assert {:ok,
-              <<0::1, 0::3, 1::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+      assert {:ok, <<0::1, 0::3, 1::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
                Frame.encode_frame({:fragment, :text, payload})
 
       assert unmask(mask, masked_payload) == payload
@@ -491,8 +481,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<0::1, 0::3, 1::4, 1::1, 126::7, ^len::16, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:fragment, :text, payload})
+              <<0::1, 0::3, 1::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:fragment, :text, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -502,8 +492,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<0::1, 0::3, 1::4, 1::1, 127::7, ^len::64, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:fragment, :text, payload})
+              <<0::1, 0::3, 1::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:fragment, :text, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -512,8 +502,7 @@ defmodule WebSockex.FrameTest do
       payload = @binary
       len = byte_size(payload)
 
-      assert {:ok,
-              <<0::1, 0::3, 2::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+      assert {:ok, <<0::1, 0::3, 2::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
                Frame.encode_frame({:fragment, :binary, payload})
 
       assert unmask(mask, masked_payload) == payload
@@ -524,8 +513,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<0::1, 0::3, 2::4, 1::1, 126::7, ^len::16, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:fragment, :binary, payload})
+              <<0::1, 0::3, 2::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:fragment, :binary, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -535,8 +524,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<0::1, 0::3, 2::4, 1::1, 127::7, ^len::64, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:fragment, :binary, payload})
+              <<0::1, 0::3, 2::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:fragment, :binary, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -545,8 +534,7 @@ defmodule WebSockex.FrameTest do
       payload = "Lemon Pies are Pies."
       len = byte_size(payload)
 
-      assert {:ok,
-              <<0::1, 0::3, 0::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+      assert {:ok, <<0::1, 0::3, 0::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
                Frame.encode_frame({:continuation, payload})
 
       assert unmask(mask, masked_payload) == payload
@@ -557,8 +545,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<0::1, 0::3, 0::4, 1::1, 126::7, ^len::16, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:continuation, payload})
+              <<0::1, 0::3, 0::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:continuation, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -568,8 +556,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<0::1, 0::3, 0::4, 1::1, 127::7, ^len::64, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:continuation, payload})
+              <<0::1, 0::3, 0::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:continuation, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -578,8 +566,7 @@ defmodule WebSockex.FrameTest do
       payload = "Lemon Pies are Pies."
       len = byte_size(payload)
 
-      assert {:ok,
-              <<1::1, 0::3, 0::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
+      assert {:ok, <<1::1, 0::3, 0::4, 1::1, ^len::7, mask::bytes-size(4), masked_payload::binary>>} =
                Frame.encode_frame({:finish, payload})
 
       assert unmask(mask, masked_payload) == payload
@@ -590,8 +577,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 0::4, 1::1, 126::7, ^len::16, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:finish, payload})
+              <<1::1, 0::3, 0::4, 1::1, 126::7, ^len::16, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:finish, payload})
 
       assert unmask(mask, masked_payload) == payload
     end
@@ -601,8 +588,8 @@ defmodule WebSockex.FrameTest do
       len = byte_size(payload)
 
       assert {:ok,
-              <<1::1, 0::3, 0::4, 1::1, 127::7, ^len::64, mask::bytes-size(4),
-                masked_payload::binary>>} = Frame.encode_frame({:finish, payload})
+              <<1::1, 0::3, 0::4, 1::1, 127::7, ^len::64, mask::bytes-size(4), masked_payload::binary>>} =
+               Frame.encode_frame({:finish, payload})
 
       assert unmask(mask, masked_payload) == payload
     end

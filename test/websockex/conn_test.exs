@@ -57,8 +57,7 @@ defmodule WebSockex.ConnTest do
                socket_recv_timeout: 456
            }
 
-    assert WebSockex.Conn.new(regular_url, regular_opts) ==
-             WebSockex.Conn.new(regular_uri, regular_opts)
+    assert WebSockex.Conn.new(regular_url, regular_opts) == WebSockex.Conn.new(regular_uri, regular_opts)
 
     conn_opts = [extra_headers: [{"Pineapple", "Cake"}]]
 
@@ -98,8 +97,7 @@ defmodule WebSockex.ConnTest do
   end
 
   test "parse_url" do
-    assert WebSockex.Conn.parse_url("lemon_pie") ==
-             {:error, %WebSockex.URLError{url: "lemon_pie"}}
+    assert WebSockex.Conn.parse_url("lemon_pie") == {:error, %WebSockex.URLError{url: "lemon_pie"}}
 
     ws_url = "ws://localhost/ws"
     assert WebSockex.Conn.parse_url(ws_url) == {:ok, URI.parse(ws_url)}
@@ -132,7 +130,14 @@ defmodule WebSockex.ConnTest do
     :ok = WebSockex.Conn.socket_send(conn, request)
 
     assert WebSockex.Conn.handle_response(conn) ==
-             {:error, %WebSockex.RequestError{code: 400, message: "Bad Request"}}
+             {:error,
+              %WebSockex.RequestError{
+                code: 400,
+                message: "Bad Request",
+                body: "",
+                headers: ["Content-Length": "0", Connection: "close"],
+                version: {1, 1}
+              }}
   end
 
   describe "secure connection" do
@@ -150,8 +155,7 @@ defmodule WebSockex.ConnTest do
 
     test "open_socket with supplied cacerts", context do
       conn =
-        WebSockex.Conn.new(
-          context.uri,
+        WebSockex.Conn.new(context.uri,
           insecure: false,
           cacerts: WebSockex.TestServer.cacerts()
         )

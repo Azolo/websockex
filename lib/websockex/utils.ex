@@ -39,12 +39,10 @@ defmodule WebSockex.Utils do
   end
 
   def register(name) do
-    try do
-      Process.register(self(), name)
-    catch
-      :error, _ ->
-        {:error, {:already_started, Process.whereis(name)}}
-    end
+    Process.register(self(), name)
+  rescue
+    _ ->
+      {:error, {:already_started, Process.whereis(name)}}
   end
 
   def send({:global, name}, msg), do: WebSockex.Utils.send({:via, :global, name}, msg)
@@ -77,19 +75,31 @@ defmodule WebSockex.Utils do
   end
 
   defp print_event(io_dev, {:in, :frame, frame}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} received frame: #{inspect(frame)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} received frame: #{inspect(frame)}"
+    )
   end
 
   defp print_event(io_dev, {:in, :completed_fragment, frame}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} completed fragmented frame: #{inspect(frame)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} completed fragmented frame: #{inspect(frame)}"
+    )
   end
 
   defp print_event(io_dev, {:in, :cast, msg}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} received cast msg: #{inspect(msg)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} received cast msg: #{inspect(msg)}"
+    )
   end
 
   defp print_event(io_dev, {:in, :msg, msg}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} received msg: #{inspect(msg)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} received msg: #{inspect(msg)}"
+    )
   end
 
   defp print_event(io_dev, {:reply, func, frame}, %{name: name}) do
@@ -107,19 +117,31 @@ defmodule WebSockex.Utils do
   end
 
   defp print_event(io_dev, {:close, :remote, reason}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} closing with the remote reason: #{inspect(reason)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} closing with the remote reason: #{inspect(reason)}"
+    )
   end
 
   defp print_event(io_dev, {:close, :local, reason}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} closing with local reason: #{inspect(reason)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} closing with local reason: #{inspect(reason)}"
+    )
   end
 
   defp print_event(io_dev, {:close, :error, error}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} closing due to error: #{inspect(error)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} closing due to error: #{inspect(error)}"
+    )
   end
 
   defp print_event(io_dev, :closed, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} closed the connection sucessfully")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} closed the connection sucessfully"
+    )
   end
 
   defp print_event(io_dev, :timeout_closed, %{name: name}) do
@@ -130,31 +152,52 @@ defmodule WebSockex.Utils do
   end
 
   defp print_event(io_dev, {:socket_out, :close, :error}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} sending error close frame: {:close, 1011, \"\"}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} sending error close frame: {:close, 1011, \"\"}"
+    )
   end
 
   defp print_event(io_dev, {:socket_out, :close, frame}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} sending close frame: #{inspect(frame)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} sending close frame: #{inspect(frame)}"
+    )
   end
 
   defp print_event(io_dev, {:socket_out, :sync_send, frame}, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} sending frame: #{inspect(frame)}")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} sending frame: #{inspect(frame)}"
+    )
   end
 
   defp print_event(io_dev, :reconnect, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} attempting to reconnect")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} attempting to reconnect"
+    )
   end
 
   defp print_event(io_dev, :connect, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} attempting to connect")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} attempting to connect"
+    )
   end
 
   defp print_event(io_dev, :connected, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} sucessfully connected")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} sucessfully connected"
+    )
   end
 
   defp print_event(io_dev, :reconnected, %{name: name}) do
-    IO.puts(io_dev, "*DBG* #{inspect(name)} sucessfully reconnected")
+    IO.puts(
+      io_dev,
+      "*DBG* #{inspect(name)} sucessfully reconnected"
+    )
   end
 
   def parse_debug_options(name, options) do
@@ -164,7 +207,11 @@ defmodule WebSockex.Utils do
           :sys.debug_options(opts)
         catch
           _, _ ->
-            :error_logger.format('~p: ignoring bad debug options ~p~n', [name, opts])
+            :error_logger.format(
+              '~p: ignoring bad debug options ~p~n',
+              [name, opts]
+            )
+
             []
         end
 

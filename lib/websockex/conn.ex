@@ -90,8 +90,7 @@ defmodule WebSockex.Conn do
       extra_headers: Keyword.get(opts, :extra_headers, []),
       cacerts: Keyword.get(opts, :cacerts, nil),
       insecure: Keyword.get(opts, :insecure, true),
-      socket_connect_timeout:
-        Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
+      socket_connect_timeout: Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
       socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
       ssl_options: Keyword.get(opts, :ssl_options, nil)
     }
@@ -297,8 +296,17 @@ defmodule WebSockex.Conn do
       {:ok, {:http_response, _version, 101, _message}, rest} ->
         decode_headers(rest)
 
-      {:ok, {:http_response, _, code, message}, _} ->
-        {:error, %WebSockex.RequestError{code: code, message: message}}
+      {:ok, {:http_response, version, code, message}, rest} ->
+        {:ok, headers, body} = decode_headers(rest)
+
+        {:error,
+         %WebSockex.RequestError{
+           version: version,
+           code: code,
+           message: message,
+           headers: headers,
+           body: body
+         }}
 
       {:error, error} ->
         {:error, error}
