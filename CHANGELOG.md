@@ -1,9 +1,15 @@
 ## In Git
+### Enhancements
+- Added `ssl_options` to `WebSockex.Conn` struct.
+  - Documentation Pending...
+
 ### Bug Fixes
 - Fix `pong` frame not being a correct return type in spec
 - Fix bare `ping` and `pong` frames in spec
   - When there is no associated payload for their frame types
 - Fix handling SSL socket closings during the `close_loop`
+- Add types and documentation for processes named with `:via` and `:global`
+- Fixed a crash when replying to a closed socket
 
 
 ## 0.4.1
