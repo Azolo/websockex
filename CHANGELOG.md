@@ -11,7 +11,6 @@
 - Add types and documentation for processes named with `:via` and `:global`
 - Fixed a crash when replying to a closed socket
 
-
 ## 0.4.1
 ### Enhancements
 - Allow `:via` and `:global` tuples for named registration. This includes
