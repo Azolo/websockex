@@ -1,4 +1,4 @@
-## In Git
+## 0.4.2
 ### Enhancements
 - Added `ssl_options` to `WebSockex.Conn` struct.
   - Documentation Pending...
