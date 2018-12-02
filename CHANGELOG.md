@@ -2,8 +2,9 @@
 ### Bug Fixes
 - Fix `pong` frame not being a correct return type in spec
 - Fix bare `ping` and `pong` frames in spec
-  - When neither grame doesn't have a payload
+  - When there is no associated payload for their frame types
 - Fix handling SSL socket closings during the `close_loop`
+
 
 ## 0.4.1
 ### Enhancements
