@@ -5,7 +5,9 @@ defmodule WebSockex.TestServer do
   alias Plug.Adapters.Cowboy
   @certfile Path.join([__DIR__, "priv", "websockex.cer"])
   @keyfile Path.join([__DIR__, "priv", "websockex.key"])
-  @cacert Path.join([__DIR__, "priv", "websockexca.cer"]) |> File.read!() |> :public_key.pem_decode()
+  @cacert Path.join([__DIR__, "priv", "websockexca.cer"])
+          |> File.read!()
+          |> :public_key.pem_decode()
 
   plug(:match)
   plug(:dispatch)
