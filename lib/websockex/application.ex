@@ -1,6 +1,10 @@
 defmodule WebSockex.Application do
   use Application
 
+  @moduledoc """
+    Start as an OTP application to set URI default sockets and start ssl and
+    crypto
+  """
   # Start as an OTP application to set URI default sockets and start ssl and
   # crypto
   @doc """

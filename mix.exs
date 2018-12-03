@@ -14,7 +14,11 @@ defmodule WebSockex.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       package: package(),
       deps: deps(),
-      docs: docs()
+      docs: docs(),
+      dialyzer: [
+        flags: [:underspecs, :unknown, :unmatched_returns],
+        plt_add_apps: [:mix, :iex, :ex_unit, :ranch, :plug, :websockex, :cowboy]
+      ]
     ]
   end
 
@@ -27,9 +31,12 @@ defmodule WebSockex.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.14", only: :dev, runtime: false},
-      {:cowboy, "~> 1.0.0", only: :test},
-      {:plug, "~> 1.0", only: :test}
+      {:ex_doc, "~> 0.19", only: :dev, runtime: false},
+      {:cowboy, "~> 2.5"},
+      {:plug, "~> 1.7"},
+      {:plug_cowboy, "~> 2.0"},
+      {:credo, "~> 1.0.0-rc1", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.0.0-rc.4", only: [:dev, :test], runtime: false}
     ]
   end
 
