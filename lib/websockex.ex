@@ -50,7 +50,7 @@ defmodule WebSockex do
   @type frame ::
           :ping
           | :pong
-          | {:ping | :pong, nil | message :: binary}
+          | {:ping | :pong, nil | (message :: binary)}
           | {:text | :binary, message :: binary}
 
   @typedoc """
