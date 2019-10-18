@@ -53,13 +53,25 @@ defmodule WebSockex.FrameTest do
       assert Frame.parse_frame(<<part::bits, rest::bits>>) == {:ok, {:text, "Hello"}, <<>>}
     end
 
-    test "handles incomplete large frames" do
+    test "handles incomplete continuation large frames" do
+      len = 0x5555
+      frame = <<1::1, 0::3, 0::4, 0::1, 126::7, len::16, 0::500*8, "Hello">>
+      assert Frame.parse_frame(frame) == :incomplete
+    end
+
+    test "handles incomplete continuation very large frame" do
+      len = 0x5FFFF
+      frame = <<1::1, 0::3, 0::4, 0::1, 127::7, len::64, 0::1000*8, "Hello">>
+      assert Frame.parse_frame(frame) == :incomplete
+    end
+
+    test "handles incomplete text large frames" do
       len = 0x5555
       frame = <<1::1, 0::3, 1::4, 0::1, 126::7, len::16, 0::500*8, "Hello">>
       assert Frame.parse_frame(frame) == :incomplete
     end
 
-    test "handles incomplete very large frame" do
+    test "handles incomplete text very large frame" do
       len = 0x5FFFF
       frame = <<1::1, 0::3, 1::4, 0::1, 127::7, len::64, 0::1000*8, "Hello">>
       assert Frame.parse_frame(frame) == :incomplete
