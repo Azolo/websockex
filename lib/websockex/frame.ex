@@ -27,7 +27,7 @@ defmodule WebSockex.Frame do
           | {:continuation, binary}
           | {:finish, binary}
 
-  @opcodes %{text: 1, binary: 2, close: 8, ping: 9, pong: 10}
+  @opcodes %{continuation: 0, text: 1, binary: 2, close: 8, ping: 9, pong: 10}
 
   @doc """
   Parses a bitstring and returns a frame.
@@ -75,7 +75,7 @@ defmodule WebSockex.Frame do
     :incomplete
   end
 
-  for {_key, opcode} <- Map.take(@opcodes, [:text, :binary]) do
+  for {_key, opcode} <- Map.take(@opcodes, [:continuation, :text, :binary]) do
     def parse_frame(
           <<_::1, 0::3, unquote(opcode)::4, 0::1, 126::7, len::16, remaining::bitstring>>
         )
