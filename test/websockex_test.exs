@@ -468,29 +468,6 @@ defmodule WebSockexTest do
     assert_receive :caught_pong
   end
 
-  test "handles a tcp message send right after connecting", context do
-    send(context.server_pid, :immediate_reply)
-
-    assert {:ok, _pid} = TestClient.start_link(context.url, %{catch_text: self()})
-
-    assert_receive {:caught_text, "Immediate Reply"}
-  end
-
-  test "handles a ssl message send right after connecting" do
-    {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
-
-    on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
-
-    {:ok, _pid} = TestClient.start_link(url, %{})
-    server_pid = WebSockex.TestServer.receive_socket_pid()
-
-    send(server_pid, :immediate_reply)
-
-    assert {:ok, _pid} = TestClient.start_link(url, %{catch_text: self()})
-
-    assert_receive {:caught_text, "Immediate Reply"}
-  end
-
   test "handle changes state", context do
     rand_number = :rand.uniform(1000)
 
@@ -1542,7 +1519,7 @@ defmodule WebSockexTest do
 
       new_server_pid = WebSockex.TestServer.receive_socket_pid()
       send(new_server_pid, :connection_continue)
-      ^new_server_pid = WebSockex.TestServer.receive_socket_pid()
+      new_server_pid = WebSockex.TestServer.receive_socket_pid()
 
       send(new_server_pid, :send_ping)
       assert_receive :received_pong
