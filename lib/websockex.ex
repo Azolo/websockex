@@ -1113,7 +1113,7 @@ defmodule WebSockex do
     apply(module, function, args)
   catch
     :error, payload ->
-      stacktrace = System.stacktrace()
+      stacktrace = __STACKTRACE__
       reason = Exception.normalize(:error, payload, stacktrace)
       {:"$EXIT", {reason, stacktrace}}
 
