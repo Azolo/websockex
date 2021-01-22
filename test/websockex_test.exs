@@ -481,7 +481,19 @@ defmodule WebSockexTest do
 
     on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
-    {:ok, _pid} = TestClient.start_link(url, %{})
+    {:ok, _pid} =
+      TestClient.start_link(url, %{},
+        insecure: false,
+        ssl_options: [
+          cacertfile:
+            Path.join([
+              __DIR__,
+              "support/priv",
+              "websockexca.cer"
+            ])
+        ]
+      )
+
     server_pid = WebSockex.TestServer.receive_socket_pid()
 
     send(server_pid, :immediate_reply)

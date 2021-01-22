@@ -46,6 +46,7 @@ defmodule WebSockex.Conn do
     default #{@socket_connect_timeout_default} ms.
   - `:socket_recv_timeout` - Timeout in ms for receiving a HTTP response header
     from socket, default #{@socket_recv_timeout_default} ms.
+  - `:ssl_options` - extra options for an SSL connection
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """
@@ -55,6 +56,7 @@ defmodule WebSockex.Conn do
           | {:insecure, boolean}
           | {:socket_connect_timeout, non_neg_integer}
           | {:socket_recv_timeout, non_neg_integer}
+          | {:ssl_options, [:ssl.tls_client_option()]}
 
   @type t :: %__MODULE__{
           conn_mod: :gen_tcp | :ssl,
@@ -224,13 +226,13 @@ defmodule WebSockex.Conn do
   Sends any access information in the buffer back to the process as a message
   to be processed.
   """
-  @spec handle_response(__MODULE__.t()) :: {:ok, [header]} | {:error, reason :: term}
-  def handle_response(conn) do
+  @spec handle_response(__MODULE__.t(), pid()) :: {:ok, [header]} | {:error, reason :: term}
+  def handle_response(conn, owner_pid) do
     with {:ok, buffer} <- wait_for_response(conn),
          {:ok, headers, buffer} <- decode_response(buffer) do
       # Send excess buffer back to the process
       unless buffer == "" do
-        send(self(), {transport(conn.conn_mod), conn.socket, buffer})
+        send(owner_pid, {transport(conn.conn_mod), conn.socket, buffer})
       end
 
       {:ok, headers}
