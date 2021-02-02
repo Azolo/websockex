@@ -131,7 +131,7 @@ defmodule WebSockex.ConnTest do
     {:ok, request} = WebSockex.Conn.build_request(conn, "pants")
     :ok = WebSockex.Conn.socket_send(conn, request)
 
-    assert WebSockex.Conn.handle_response(conn) ==
+    assert WebSockex.Conn.handle_response(conn, self()) ==
              {:error, %WebSockex.RequestError{code: 400, message: "Bad Request"}}
   end
 

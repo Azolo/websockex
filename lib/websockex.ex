@@ -1014,7 +1014,7 @@ defmodule WebSockex do
              key <- :crypto.strong_rand_bytes(16) |> Base.encode64(),
              {:ok, request} <- WebSockex.Conn.build_request(conn, key),
              :ok <- WebSockex.Conn.socket_send(conn, request),
-             {:ok, headers} <- WebSockex.Conn.handle_response(conn),
+             {:ok, headers} <- WebSockex.Conn.handle_response(conn, my_pid),
              :ok <- validate_handshake(headers, key) do
           :ok = WebSockex.Conn.controlling_process(conn, my_pid)
           :ok = WebSockex.Conn.set_active(conn)
