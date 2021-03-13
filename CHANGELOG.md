@@ -1,4 +1,11 @@
-## 0.4.2
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 0.4.2 - 2018-12-01
 ### Enhancements
 - Added `ssl_options` to `WebSockex.Conn` struct.
   - Documentation Pending...
@@ -11,7 +18,7 @@
 - Add types and documentation for processes named with `:via` and `:global`
 - Fixed a crash when replying to a closed socket
 
-## 0.4.1
+## 0.4.1 - 2018-01-22
 ### Enhancements
 - Allow `:via` and `:global` tuples for named registration. This includes
   handling for `cast/2` and `send_frame/2`.
@@ -31,7 +38,7 @@
   - This _seems_ pretty important, but I don't know...
 - Return a descriptive error when trying to use `send_frame/2` in a callback.
 
-## 0.4.0
+## 0.4.0 - 2017-07-11
 ### Breaking Changes
 - `send_frame/2` is now synchronous and returns an error when connection is
   opening or closing.
@@ -52,7 +59,7 @@
 - Fix a couple of places where the call stack wasn't being properly tail-call
   optimized.
 
-## 0.3.1
+## 0.3.1 - 2017-06-23
 ### Enhancements
 - Handle system messages and parent exits while closing the connection.
 - The output from `:sys.get_status` didn't look pretty in `:observer` now it
@@ -64,7 +71,7 @@
   left in a dead Task mailbox.
 - Fixed some places where `dialyzer` told me I had my specs screwed up.
 
-## 0.3.0
+## 0.3.0 - 2017-06-17
 ### Breaking Changes
 - The parameters for the `handle_connect/2` callback have been reversed. The
   order is now `(conn, state)`.
@@ -79,7 +86,7 @@
 - Added the ability to handle system messages while opening a connection.
 - Added the ability to handle parent exit messages while opening a connection.
 - Improve `:sys.get_status`, `:sys.get_state`, `:sys.replace_state` functions.
-  - These are undocumented, but are meant primarly for debugging.
+  - These are undocumented, but are meant primarily for debugging.
 
 ### Bug Fixes
 - Ensure `terminate/2` callback is called consistently.
@@ -87,7 +94,7 @@
 - Add the `system_code_change` function so that the `code_change` callback is
   actually used.
 
-## 0.2.0
+## 0.2.0 - 2017-06-02
 ### Major Changes
 - Moved all the `WebSockex.Client` module functionality into the base
   `WebSockex` module.
@@ -97,7 +104,7 @@
 ### Detailed Changes
 - Roll `init` functionality into `handle_connect`
   - `handle_connect` will be invoked upon establishing any connection, i.e.,
-    the intial connection and when reconnecting.
+    the initial connection and when reconnecting.
   - The `init` callback is removed entirely.
 - Moved all the `WebSockex.Client` module functionality into the base
   `WebSockex` module.
@@ -115,13 +122,13 @@
     establish a connection during those functions.
   - Removed `handle_connect_failure` entirely.
 
-## 0.1.3
+## 0.1.3 - 2017-05-17
 - `Client.start_link` will no longer cause the calling process to exit on
   connection failure and will return a proper error tuple instead.
 - Change `WebSockex.Conn.RequestError` to `WebSockex.RequestError`.
 - Add `handle_connect_failure` to be invoked after initiating a connection
   fails. Fixes #5
 
-## 0.1.2
+## 0.1.2 - 2017-04-21
 - Rework how disconnects are handled which should improve the
   `handle_disconnect` callback reliability.

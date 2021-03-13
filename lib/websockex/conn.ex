@@ -4,7 +4,7 @@ defmodule WebSockex.Conn do
 
   Dispatches to the correct module for the underlying connection. (`:gen_tcp` or `:ssl`)
 
-  Is woefully inadequite for verifying proper peers in SSL connections.
+  Is woefully inadequate for verifying proper peers in SSL connections.
   """
 
   @socket_connect_timeout_default 6000
