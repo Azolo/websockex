@@ -143,7 +143,10 @@ defmodule WebSockex do
 
   This is invoked after both the initial connection and a reconnect.
   """
-  @callback handle_connect(conn :: WebSockex.Conn.t(), state :: term) :: {:ok, new_state :: term}
+  @callback handle_connect(conn :: WebSockex.Conn.t(), state :: term) ::
+              {:ok, new_state}
+              | {:reply, frame, new_state}
+            when new_state: term
 
   @doc """
   Invoked on the reception of a frame on the socket.
