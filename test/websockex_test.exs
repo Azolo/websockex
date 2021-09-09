@@ -266,15 +266,21 @@ defmodule WebSockexTest do
     use WebSockex
   end
 
-  setup do
+  setup context do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
 
     on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
-    {:ok, pid} = TestClient.start_link(url, %{})
-    server_pid = WebSockex.TestServer.receive_socket_pid()
+    context = Map.merge(context, %{url: url, server_ref: server_ref})
 
-    [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
+    if context[:skip_default_client] do
+      context
+    else
+      {:ok, pid} = TestClient.start_link(url, %{})
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      Map.merge(context, %{pid: pid, server_pid: server_pid})
+    end
   end
 
   describe "local named processes" do
@@ -1658,6 +1664,106 @@ defmodule WebSockexTest do
 
       assert ChildSpecTest.child_spec(1, 2) == "llama"
       assert ChildSpecTest.child_spec(1) == "hippo"
+    end
+  end
+
+  describe "telemetry" do
+    @describetag :skip_default_client
+
+    setup context do
+      unless context.telemetry_event do
+        raise "Please set a :telemetry_event to subscribe to, as tag in your telemetry based tests"
+      end
+
+      this = self()
+
+      :telemetry.attach(
+        [:test] ++ context.telemetry_event,
+        context.telemetry_event,
+        fn _, measurements, metadata, _ ->
+          send(this, %{measurements: measurements, metadata: metadata})
+        end,
+        %{}
+      )
+
+      {:ok, pid} = TestClient.start(context.url, %{catch_text: self()})
+      server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      Map.merge(context, %{pid: pid, server_pid: server_pid})
+    end
+
+    @tag telemetry_event: [:websockex, :connect]
+    test "emits an event on connections", context do
+      assert_receive %{
+        measurements: _,
+        metadata: metadata
+      }
+
+      assert metadata.pid == context.pid
+      assert WebSockexTest.TestClient == metadata.module
+      assert metadata.conn
+    end
+
+    @tag telemetry_event: [:websockex, :terminate]
+    test "emits an event on terminations", context do
+      send(context.pid, :bad_reply)
+
+      assert_receive %{
+        measurements: _,
+        metadata: metadata
+      }
+
+      assert metadata.pid == context.pid
+      assert WebSockexTest.TestClient == metadata.module
+      assert metadata.conn
+      assert metadata.reason
+    end
+
+    @tag telemetry_event: [:websockex, :disconnect]
+    test "emits an event on disconnections", context do
+      send(context.server_pid, :close)
+
+      assert_receive %{
+        measurements: _,
+        metadata: metadata
+      }
+
+      assert metadata.pid == context.pid
+      assert WebSockexTest.TestClient == metadata.module
+      assert metadata.conn
+      assert metadata.reason
+    end
+
+    @tag telemetry_event: [:websockex, :frame, :sent]
+    test "emits an event on frames sent", context do
+      assert WebSockex.send_frame(context.pid, :ping) == :ok
+
+      assert_receive %{
+        measurements: _,
+        metadata: metadata
+      }
+
+      assert metadata.pid == context.pid
+      assert WebSockexTest.TestClient == metadata.module
+      assert metadata.conn
+      assert metadata.frame == :ping
+    end
+
+    @tag telemetry_event: [:websockex, :frame, :received]
+    test "emits an event on frames received", context do
+      frame = {:text, "hello"}
+
+      send(context.server_pid, {:send, frame})
+
+      assert_receive %{
+        measurements: _,
+        metadata: metadata
+      }
+
+      assert metadata.pid == context.pid
+      assert WebSockexTest.TestClient == metadata.module
+      assert metadata.conn
+      assert metadata.frame == frame
     end
   end
 end

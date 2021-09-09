@@ -22,14 +22,15 @@ defmodule WebSockex.Mixfile do
   defp elixirc_paths(_), do: ['lib']
 
   def application do
-    [applications: [:logger, :ssl, :crypto], mod: {WebSockex.Application, []}]
+    [applications: [:logger, :ssl, :crypto, :telemetry], mod: {WebSockex.Application, []}]
   end
 
   defp deps do
     [
       {:ex_doc, "~> 0.14", only: :dev, runtime: false},
       {:cowboy, "~> 1.0.0", only: :test},
-      {:plug, "~> 1.0", only: :test}
+      {:plug, "~> 1.0", only: :test},
+      {:telemetry, "~> 1.0"}
     ]
   end
 

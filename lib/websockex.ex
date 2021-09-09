@@ -622,6 +622,13 @@ defmodule WebSockex do
     case WebSockex.Frame.parse_frame(state.buffer) do
       {:ok, frame, buffer} ->
         debug = Utils.sys_debug(debug, {:in, :frame, frame}, state)
+
+        :telemetry.execute(
+          [:websockex, :frame, :received],
+          %{time: System.system_time()},
+          telemetry_metadata(state, %{frame: frame})
+        )
+
         handle_frame(frame, parent, debug, %{state | buffer: buffer})
 
       :incomplete ->
@@ -899,6 +906,12 @@ defmodule WebSockex do
 
     case res do
       :ok ->
+        :telemetry.execute(
+          [:websockex, :frame, :sent],
+          %{time: System.system_time()},
+          telemetry_metadata(state, %{frame: frame})
+        )
+
         :gen.reply(from, :ok)
         debug = Utils.sys_debug(debug, {:socket_out, :sync_send, frame}, state)
         websocket_loop(parent, debug, state)
@@ -1028,6 +1041,12 @@ defmodule WebSockex do
   # Other State Functions
 
   defp module_init(parent, debug, state) do
+    :telemetry.execute(
+      [:websockex, :connect],
+      %{time: System.system_time()},
+      telemetry_metadata(state)
+    )
+
     result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
 
     case result do
@@ -1058,12 +1077,28 @@ defmodule WebSockex do
   end
 
   @spec terminate(any, pid, any, any) :: no_return
-  defp terminate(reason, parent, debug, %{conn: %{socket: socket}} = state)
+  defp terminate(reason, parent, debug, state) do
+    :telemetry.execute(
+      [:websockex, :terminate],
+      %{time: System.system_time()},
+      telemetry_metadata(state, %{reason: reason})
+    )
+
+    do_terminate(reason, parent, debug, state)
+  end
+
+  defp do_terminate(reason, parent, debug, %{conn: %{socket: socket}} = state)
        when not is_nil(socket) do
     handle_terminate_close(reason, parent, debug, state)
   end
 
-  defp terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state}) do
+  defp do_terminate(reason, _parent, _debug, %{module: mod, module_state: mod_state} = state) do
+    :telemetry.execute(
+      [:websockex, :terminate],
+      %{time: System.system_time()},
+      telemetry_metadata(state, %{reason: reason})
+    )
+
     mod.terminate(reason, mod_state)
 
     case reason do
@@ -1080,6 +1115,12 @@ defmodule WebSockex do
 
   defp handle_disconnect(reason, state, attempt) do
     status_map = %{conn: state.conn, reason: reason, attempt_number: attempt}
+
+    :telemetry.execute(
+      [:websockex, :disconnect],
+      %{time: System.system_time()},
+      telemetry_metadata(state, status_map)
+    )
 
     result = try_callback(state.module, :handle_disconnect, [status_map, state.module_state])
 
@@ -1160,5 +1201,9 @@ defmodule WebSockex do
           100 -> :ok
         end
     end
+  end
+
+  defp telemetry_metadata(state, extra_metadata \\ %{}) do
+    Map.merge(%{conn: state.conn, module: state.module, pid: self()}, extra_metadata)
   end
 end
