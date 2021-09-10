@@ -1034,7 +1034,7 @@ defmodule WebSockex do
   # Other State Functions
 
   defp module_init(parent, debug, state) do
-    execute_telemetry([:websockex, :connect], state)
+    execute_telemetry([:websockex, :connected], state)
 
     result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
 
@@ -1095,7 +1095,7 @@ defmodule WebSockex do
   defp handle_disconnect(reason, state, attempt) do
     status_map = %{conn: state.conn, reason: reason, attempt_number: attempt}
 
-    execute_telemetry([:websockex, :disconnect], state, status_map)
+    execute_telemetry([:websockex, :disconnected], state, status_map)
 
     result = try_callback(state.module, :handle_disconnect, [status_map, state.module_state])
 
@@ -1180,7 +1180,7 @@ defmodule WebSockex do
 
   if WebSockex.Utils.otp_release() >= 21 do
     defp execute_telemetry(event, state, extra_metadata \\ %{}) do
-      metadata = Map.merge(%{conn: state.conn, module: state.module, pid: self()}, extra_metadata)
+      metadata = Map.merge(%{conn: state.conn, module: state.module}, extra_metadata)
       :telemetry.execute(event, %{time: System.system_time()}, metadata)
     end
   else

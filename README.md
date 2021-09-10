@@ -112,13 +112,13 @@ particular piece of advice here.
 
 Websockex clients emit the following telemetry events:
 
-* `[:websockex, :connect]`
-* `[:websockex, :disconnect]`
+* `[:websockex, :connected]`
+* `[:websockex, :disconnected]`
 * `[:websockex, :frame, :received]`
 * `[:websockex, :frame, :sent]`
 * `[:websockex, :terminate]`
 
-For all these events, the measurements is `%{time: System.system_time()}` and they all share common metadata as a map containing the `:conn`, `:pid`, `:module` keys. For frame events, the metadata also contains the `:frame` key. For disconnections and terminations, it will contain the `:reason` key. 
+For all these events, the measurements is `%{time: System.system_time()}` and they all share common metadata as a map containing the `:conn` and the `:module` keys. For frame events, the metadata also contains the `:frame` key. For disconnections and terminations, it will contain the `:reason` key. 
 
 
 ## Tips

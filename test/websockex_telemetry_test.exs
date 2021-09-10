@@ -11,9 +11,10 @@ defmodule WebSockexTelemetryTest do
         end
 
         this = self()
+        handler_id = [:test] ++ context.telemetry_event
 
         :telemetry.attach(
-          [:test] ++ context.telemetry_event,
+          handler_id,
           context.telemetry_event,
           fn _, measurements, metadata, _ ->
             send(this, %{measurements: measurements, metadata: metadata})
@@ -26,6 +27,7 @@ defmodule WebSockexTelemetryTest do
         {:ok, pid} = TestClient.start(url, %{catch_text: self()})
 
         on_exit(fn ->
+          :telemetry.detach(handler_id)
           Process.exit(pid, :kill)
           WebSockex.TestServer.shutdown(server_ref)
         end)
@@ -35,14 +37,13 @@ defmodule WebSockexTelemetryTest do
         Map.merge(context, %{pid: pid, server_pid: server_pid, url: url, server_ref: server_ref})
       end
 
-      @tag telemetry_event: [:websockex, :connect]
-      test "emits an event on connections", context do
+      @tag telemetry_event: [:websockex, :connected]
+      test "emits an event on connections" do
         assert_receive %{
           measurements: _,
           metadata: metadata
         }
 
-        assert metadata.pid == context.pid
         assert WebSockex.TestClient == metadata.module
         assert metadata.conn
       end
@@ -56,13 +57,12 @@ defmodule WebSockexTelemetryTest do
           metadata: metadata
         }
 
-        assert metadata.pid == context.pid
         assert WebSockex.TestClient == metadata.module
         assert metadata.conn
         assert metadata.reason
       end
 
-      @tag telemetry_event: [:websockex, :disconnect]
+      @tag telemetry_event: [:websockex, :disconnected]
       test "emits an event on disconnections", context do
         send(context.server_pid, :close)
 
@@ -71,7 +71,6 @@ defmodule WebSockexTelemetryTest do
           metadata: metadata
         }
 
-        assert metadata.pid == context.pid
         assert WebSockex.TestClient == metadata.module
         assert metadata.conn
         assert metadata.reason
@@ -86,7 +85,6 @@ defmodule WebSockexTelemetryTest do
           metadata: metadata
         }
 
-        assert metadata.pid == context.pid
         assert WebSockex.TestClient == metadata.module
         assert metadata.conn
         assert metadata.frame == :ping
@@ -103,7 +101,6 @@ defmodule WebSockexTelemetryTest do
           metadata: metadata
         }
 
-        assert metadata.pid == context.pid
         assert WebSockex.TestClient == metadata.module
         assert metadata.conn
         assert metadata.frame == frame
