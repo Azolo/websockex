@@ -22,16 +22,29 @@ defmodule WebSockex.Mixfile do
   defp elixirc_paths(_), do: ['lib']
 
   def application do
-    [applications: [:logger, :ssl, :crypto], mod: {WebSockex.Application, []}]
+    applications = [:logger, :ssl, :crypto] ++ applications(otp_release())
+    [applications: applications, mod: {WebSockex.Application, []}]
   end
+
+  defp applications(otp_release) when otp_release >= 21 do
+    [:telemetry]
+  end
+
+  defp applications(_), do: []
 
   defp deps do
     [
       {:ex_doc, "~> 0.14", only: :dev, runtime: false},
       {:cowboy, "~> 1.0.0", only: :test},
       {:plug, "~> 1.0", only: :test}
-    ]
+    ] ++ optional_deps(otp_release())
   end
+
+  defp optional_deps(otp_release) when otp_release >= 21 do
+    [{:telemetry, "~> 1.0"}]
+  end
+
+  defp optional_deps(_), do: []
 
   defp package do
     %{
@@ -46,5 +59,9 @@ defmodule WebSockex.Mixfile do
       extras: ["README.md"],
       main: "readme"
     ]
+  end
+
+  defp otp_release do
+    :erlang.system_info(:otp_release) |> to_string() |> String.to_integer()
   end
 end

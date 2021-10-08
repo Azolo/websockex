@@ -108,6 +108,19 @@ application tree. This is generally a good piece of advice for any process, howe
 bevhaviour can be written as a self-sustaining tcp connection. I feel like it is even more important to express this
 particular piece of advice here.
 
+## Telemetry
+
+Websockex clients emit the following telemetry events:
+
+* `[:websockex, :connected]`
+* `[:websockex, :disconnected]`
+* `[:websockex, :frame, :received]`
+* `[:websockex, :frame, :sent]`
+* `[:websockex, :terminate]`
+
+For all these events, the measurements is `%{time: System.system_time()}` and they all share common metadata as a map containing the `:conn` and the `:module` keys. For frame events, the metadata also contains the `:frame` key. For disconnections and terminations, it will contain the `:reason` key. 
+
+
 ## Tips
 ### Terminating with :normal after an Exceptional Close or Error
 
