@@ -1,6 +1,12 @@
 defmodule WebSockex.Utils do
   @moduledoc false
 
+  # OTP
+
+  def otp_release do
+    :erlang.system_info(:otp_release) |> to_string() |> String.to_integer()
+  end
+
   # Startup
 
   def spawn(link, conn, module, state, opts) do

@@ -35,7 +35,7 @@ Add `websockex` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:websockex, "~> 0.4.2"}]
+  [{:websockex, "~> 0.4.3"}]
 end
 ```
 
@@ -107,6 +107,19 @@ This is because `start/3` creates a detached process and has the capability to p
 application tree. This is generally a good piece of advice for any process, however since a module using WebSockex
 bevhaviour can be written as a self-sustaining tcp connection. I feel like it is even more important to express this
 particular piece of advice here.
+
+## Telemetry
+
+Websockex clients emit the following telemetry events:
+
+* `[:websockex, :connected]`
+* `[:websockex, :disconnected]`
+* `[:websockex, :frame, :received]`
+* `[:websockex, :frame, :sent]`
+* `[:websockex, :terminate]`
+
+For all these events, the measurements is `%{time: System.system_time()}` and they all share common metadata as a map containing the `:conn` and the `:module` keys. For frame events, the metadata also contains the `:frame` key. For disconnections and terminations, it will contain the `:reason` key. 
+
 
 ## Tips
 ### Terminating with :normal after an Exceptional Close or Error

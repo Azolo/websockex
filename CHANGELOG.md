@@ -1,3 +1,13 @@
+## 0.4.3
+### Enhancements
+- Added `ssl_options` documentation
+  - Also support for dialyzer analysis
+
+### Bug Fixes
+- Properly hand-off when establishing a connection using `:ssl`
+  - Before we could miss messages that were sent before hand-off
+- Handle large but incomplete `:continuation` frames.
+
 ## 0.4.2
 ### Enhancements
 - Added `ssl_options` to `WebSockex.Conn` struct.
