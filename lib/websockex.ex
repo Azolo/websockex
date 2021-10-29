@@ -496,7 +496,7 @@ defmodule WebSockex do
 
   @doc false
   def format_status(opt, [pdict, sys_state, parent, debug, state]) do
-    log = :sys.get_debug(:log, debug, [])
+    log = :sys.get_log(debug)
     module_misc = module_status(opt, state.module, pdict, state.module_state)
 
     [

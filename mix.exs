@@ -1,5 +1,6 @@
 defmodule WebSockex.Mixfile do
   use Mix.Project
+  @env Mix.env()
 
   def project do
     [
@@ -23,8 +24,15 @@ defmodule WebSockex.Mixfile do
 
   def application do
     applications = [:logger, :ssl, :crypto] ++ applications(otp_release())
-    [applications: applications, mod: {WebSockex.Application, []}]
+    [
+      applications: applications,
+      mod: {WebSockex.Application, []},
+      extra_applications: extra_application(@env)
+    ]
   end
+
+  defp extra_application(env) when env in [:dev, :test], do: [:plug, :cowboy]
+  defp extra_application(_env), do: []
 
   defp applications(otp_release) when otp_release >= 21 do
     [:telemetry]
@@ -35,8 +43,8 @@ defmodule WebSockex.Mixfile do
   defp deps do
     [
       {:ex_doc, "~> 0.14", only: :dev, runtime: false},
-      {:cowboy, "~> 1.0.0", only: :test},
-      {:plug, "~> 1.0", only: :test}
+      {:plug_cowboy, "~> 1.0.0", only: [:dev, :test]},
+      {:ranch, "~> 1.8", only: [:dev, :test]},
     ] ++ optional_deps(otp_release())
   end
 

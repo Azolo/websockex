@@ -3,7 +3,7 @@ defmodule WebSockex.Frame do
   Functions for parsing and encoding frames.
   """
 
-  import Bitwise
+  @otp_vesion System.otp_release() |> Integer.parse() |> elem(0)
 
   @type opcode :: :text | :binary | :close | :ping | :pong
   @type close_code :: 1000..4999
@@ -391,13 +391,19 @@ defmodule WebSockex.Frame do
 
   for x <- 1..3 do
     defp mask(<<key::8*unquote(x), _::binary>>, <<part::8*unquote(x)>>, acc) do
-      masked = part ^^^ key
+      masked = xor(part, key)
       <<acc::binary, masked::8*unquote(x)>>
     end
   end
 
   defp mask(<<key::32>> = key_bin, <<part::8*4, rest::binary>>, acc) do
-    masked = part ^^^ key
+    masked = xor(part, key)
     mask(key_bin, rest, <<acc::binary, masked::8*4>>)
+  end
+
+  if @otp_vesion >= 24 do
+    defp xor(a, b), do: Bitwise.bxor(a, b)
+  else
+    defp xor(a, b), do: Bitwise.^^^(a, b)
   end
 end
