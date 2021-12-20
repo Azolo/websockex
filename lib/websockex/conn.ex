@@ -23,7 +23,8 @@ defmodule WebSockex.Conn do
             cacerts: nil,
             insecure: true,
             resp_headers: [],
-            ssl_options: nil
+            ssl_options: nil,
+            tcp_options: nil
 
   @type socket :: :gen_tcp.socket() | :ssl.sslsocket()
   @type header :: {field :: String.t(), value :: String.t()}
@@ -47,6 +48,7 @@ defmodule WebSockex.Conn do
   - `:socket_recv_timeout` - Timeout in ms for receiving a HTTP response header
     from socket, default #{@socket_recv_timeout_default} ms.
   - `:ssl_options` - extra options for an SSL connection
+  - `:tcp_options` - extra options for the TCP part of the connection
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """
@@ -57,6 +59,7 @@ defmodule WebSockex.Conn do
           | {:socket_connect_timeout, non_neg_integer}
           | {:socket_recv_timeout, non_neg_integer}
           | {:ssl_options, [:ssl.tls_client_option()]}
+          | {:tcp_options, [:gen_tcp.option()]}
 
   @type t :: %__MODULE__{
           conn_mod: :gen_tcp | :ssl,
@@ -95,7 +98,8 @@ defmodule WebSockex.Conn do
       socket_connect_timeout:
         Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
       socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
-      ssl_options: Keyword.get(opts, :ssl_options, nil)
+      ssl_options: Keyword.get(opts, :ssl_options, nil),
+      tcp_options: Keyword.get(opts, :tcp_options, nil),
     }
   end
 
@@ -153,7 +157,7 @@ defmodule WebSockex.Conn do
     case :gen_tcp.connect(
            String.to_charlist(conn.host),
            conn.port,
-           [:binary, active: false, packet: 0],
+           tcp_connection_options(conn),
            conn.socket_connect_timeout
          ) do
       {:ok, socket} ->
@@ -316,6 +320,25 @@ defmodule WebSockex.Conn do
         {:ok, headers, body}
     end
   end
+
+  defp minimal_tcp_connection_options() do
+    [
+      mode: :binary,
+      active: false,
+      packet: 0
+    ]
+  end
+
+
+  defp tcp_connection_options(%{tcp_options: tcp_options}) when not is_nil(tcp_options) do
+    minimal_tcp_connection_options()
+    |> Keyword.merge(tcp_options)
+  end
+
+  defp tcp_connection_options(%{tcp_options: tcp_options}) do
+    minimal_tcp_connection_options()
+  end
+
 
   # Crazy SSL Stuff (It will be normal SSL stuff when I figure out Erlang's ssl)
 

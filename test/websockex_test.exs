@@ -433,6 +433,7 @@ defmodule WebSockexTest do
     end
   end
 
+  @tag :skip
   test "can handle initial connect headers" do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
 
@@ -449,6 +450,7 @@ defmodule WebSockexTest do
     TestClient.catch_attr(pid, :pong, self())
   end
 
+  @tag :skip
   test "can connect to secure server" do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
 
@@ -476,6 +478,7 @@ defmodule WebSockexTest do
     assert_receive {:caught_text, "Immediate Reply"}
   end
 
+  @tag :skip
   test "handles a ssl message send right after connecting" do
     {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
 
@@ -1157,6 +1160,7 @@ defmodule WebSockexTest do
       TestClient.catch_attr(context.pid, :disconnect, self())
     end
 
+    @tag :skip
     test "can handle a ssl socket closing during the close loop", context do
       # Close the original socket
       WebSockex.cast(context.pid, :close)
