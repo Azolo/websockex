@@ -148,7 +148,6 @@ defmodule WebSockex.ConnTest do
       [url: url, uri: uri, conn: conn]
     end
 
-    @tag :skip
     test "open_socket with supplied cacerts", context do
       conn =
         WebSockex.Conn.new(
@@ -161,7 +160,6 @@ defmodule WebSockex.ConnTest do
                WebSockex.Conn.open_socket(conn)
     end
 
-    @tag :skip
     test "open_socket with insecure flag", context do
       conn = WebSockex.Conn.new(context.uri, insecure: true)
 
@@ -169,7 +167,6 @@ defmodule WebSockex.ConnTest do
                WebSockex.Conn.open_socket(conn)
     end
 
-    @tag :skip
     test "close_socket", context do
       socket = context.conn.socket
 
@@ -179,7 +176,6 @@ defmodule WebSockex.ConnTest do
       assert {:error, _} = :ssl.sockname(socket)
     end
 
-    @tag :skip
     test "open_socket with custom ssl options", context do
       ssl_options = [cacertfile: Path.join([__DIR__, "..", "support", "priv", "websockexca.cer"])]
       conn = WebSockex.Conn.new(context.uri, ssl_options: ssl_options)
@@ -217,7 +213,6 @@ defmodule WebSockex.ConnTest do
       assert :inet.getopts(context.conn.socket, [:active]) == {:ok, active: false}
     end
 
-    @tag :skip
     test "works on wss connections" do
       {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
       on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
