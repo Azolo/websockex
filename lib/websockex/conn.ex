@@ -24,7 +24,7 @@ defmodule WebSockex.Conn do
             insecure: true,
             resp_headers: [],
             ssl_options: nil,
-            tcp_options: nil
+            socket_options: nil
 
   @type socket :: :gen_tcp.socket() | :ssl.sslsocket()
   @type header :: {field :: String.t(), value :: String.t()}
@@ -48,7 +48,7 @@ defmodule WebSockex.Conn do
   - `:socket_recv_timeout` - Timeout in ms for receiving a HTTP response header
     from socket, default #{@socket_recv_timeout_default} ms.
   - `:ssl_options` - extra options for an SSL connection
-  - `:tcp_options` - extra options for the TCP part of the connection
+  - `:socket_options` - extra options for the TCP part of the connection
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """
@@ -59,7 +59,7 @@ defmodule WebSockex.Conn do
           | {:socket_connect_timeout, non_neg_integer}
           | {:socket_recv_timeout, non_neg_integer}
           | {:ssl_options, [:ssl.tls_client_option()]}
-          | {:tcp_options, [:gen_tcp.option()]}
+          | {:socket_options, [:gen_tcp.option()]}
 
   @type t :: %__MODULE__{
           conn_mod: :gen_tcp | :ssl,
@@ -99,7 +99,7 @@ defmodule WebSockex.Conn do
         Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
       socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
       ssl_options: Keyword.get(opts, :ssl_options, nil),
-      tcp_options: Keyword.get(opts, :tcp_options, nil),
+      socket_options: Keyword.get(opts, :socket_options, nil),
     }
   end
 
@@ -157,7 +157,7 @@ defmodule WebSockex.Conn do
     case :gen_tcp.connect(
            String.to_charlist(conn.host),
            conn.port,
-           tcp_connection_options(conn),
+           socket_connection_options(conn),
            conn.socket_connect_timeout
          ) do
       {:ok, socket} ->
@@ -321,7 +321,7 @@ defmodule WebSockex.Conn do
     end
   end
 
-  defp minimal_tcp_connection_options() do
+  defp minimal_socket_connection_options() do
     [
       mode: :binary,
       active: false,
@@ -330,13 +330,13 @@ defmodule WebSockex.Conn do
   end
 
 
-  defp tcp_connection_options(%{tcp_options: tcp_options}) when not is_nil(tcp_options) do
-    minimal_tcp_connection_options()
-    |> Keyword.merge(tcp_options)
+  defp socket_connection_options(%{socket_options: socket_options}) when not is_nil(socket_options) do
+    minimal_socket_connection_options()
+    |> Keyword.merge(socket_options)
   end
 
-  defp tcp_connection_options(%{tcp_options: tcp_options}) do
-    minimal_tcp_connection_options()
+  defp socket_connection_options(%{socket_options: socket_options}) do
+    minimal_socket_connection_options()
   end
 
 
