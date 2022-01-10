@@ -4,7 +4,8 @@ defmodule WebSockex.TestServer do
 
   @certfile Path.join([__DIR__, "priv", "websockex.cer"])
   @keyfile Path.join([__DIR__, "priv", "websockex.key"])
-  @cacert Path.join([__DIR__, "priv", "websockexca.cer"]) |> File.read!()
+  @cacert Path.join([__DIR__, "priv", "websockexca.cer"])
+          |> File.read!()
           |> :public_key.pem_decode()
 
   plug(:match)
@@ -62,7 +63,8 @@ defmodule WebSockex.TestServer do
 
   def receive_socket_pid do
     receive do
-      pid when is_pid(pid) -> pid
+      pid when is_pid(pid) ->
+        pid
     after
       500 -> raise "No Server Socket pid"
     end
@@ -89,108 +91,122 @@ defmodule WebSockex.TestServer do
 end
 
 defmodule WebSockex.TestSocket do
-  @behaviour :cowboy_websocket_handler
+  @behaviour :cowboy_websocket
 
-  def init(_, req, [{test_pid, agent_pid}]) do
+  @impl true
+  def init(req, [{peer_pid, agent_pid}]) do
+    state = %{pid: peer_pid, agent_pid: agent_pid}
+
     case Agent.get(agent_pid, fn x -> x end) do
       :ok ->
-        {:upgrade, :protocol, :cowboy_websocket}
+        {:cowboy_websocket, req, state}
 
       int when is_integer(int) ->
         :cowboy_req.reply(int, req)
         {:shutdown, req, :tests_are_fun}
 
       :connection_wait ->
-        send(test_pid, self())
-
-        receive do
-          :connection_continue ->
-            {:upgrade, :protocol, :cowboy_websocket}
-        end
+        send(peer_pid, self())
+        wait_for_signal(:connection_continue)
+        {:cowboy_websocket, req, state}
 
       :immediate_reply ->
-        immediate_reply(req)
+        {:cowboy_websocket, req, {:immediate_reply, state}}
     end
   end
 
-  def terminate(_, _, _), do: :ok
-
-  def websocket_init(_, req, [{test_pid, agent_pid}]) do
-    send(test_pid, self())
-    {:ok, req, %{pid: test_pid, agent_pid: agent_pid}}
+  defp wait_for_signal(signal) do
+    receive do
+      ^signal -> :ok
+    end
   end
 
-  def websocket_terminate({:remote, :closed}, _, state) do
+  def websocket_init({:immediate_reply, state}) do
+    frame = {:text, "Immediate Reply"}
+    {:reply, frame, state}
+  end
+
+  def websocket_init(state) do
+    send(state.pid, self())
+    {:ok, state}
+  end
+
+  @impl true
+  def terminate(:remote, _req, state) do
     send(state.pid, :normal_remote_closed)
-  end
-
-  def websocket_terminate({:remote, close_code, reason}, _, state) do
-    send(state.pid, {close_code, reason})
-  end
-
-  def websocket_terminate(_, _, _) do
     :ok
   end
 
-  def websocket_handle({:binary, msg}, req, state) do
+  def terminate({:remote, close_code, reason}, _, state) do
+    send(state.pid, {close_code, reason})
+    :ok
+  end
+
+  def terminate(reason, _, state) do
+    :ok
+  end
+
+  @impl true
+  def websocket_handle({:binary, msg}, state) do
     send(state.pid, :erlang.binary_to_term(msg))
-    {:ok, req, state}
+    {:ok, state}
   end
 
-  def websocket_handle({:ping, _}, req, state), do: {:ok, req, state}
+  def websocket_handle(:ping, state),
+    do: {:ok, state}
 
-  def websocket_handle({:pong, ""}, req, state) do
+  def websocket_handle(:pong, state) do
     send(state.pid, :received_pong)
-    {:ok, req, state}
+    {:ok, state}
   end
 
-  def websocket_handle({:pong, payload}, req, %{ping_payload: ping_payload} = state)
+  def websocket_handle({:pong, payload}, %{ping_payload: ping_payload} = state)
       when payload == ping_payload do
     send(state.pid, :received_payload_pong)
-    {:ok, req, state}
+    {:ok, state}
   end
 
-  def websocket_info(:stall, _, _) do
-    Process.sleep(:infinity)
-  end
+  @impl true
+  def websocket_info(:stall, _),
+    do: Process.sleep(:infinity)
 
-  def websocket_info(:send_ping, req, state), do: {:reply, :ping, req, state}
+  def websocket_info(:send_ping, state),
+    do: {:reply, :ping, state}
 
-  def websocket_info(:send_payload_ping, req, state) do
+  def websocket_info(:send_payload_ping, state) do
     payload = "Llama and Lambs"
-    {:reply, {:ping, payload}, req, Map.put(state, :ping_payload, payload)}
+    {:reply, {:ping, payload}, Map.put(state, :ping_payload, payload)}
   end
 
-  def websocket_info(:close, req, state), do: {:reply, :close, req, state}
+  def websocket_info(:close, state),
+    do: {:reply, :close, state}
 
-  def websocket_info({:close, code, reason}, req, state) do
-    {:reply, {:close, code, reason}, req, state}
-  end
+  def websocket_info({:close, code, reason}, state),
+    do: {:reply, {:close, code, reason}, state}
 
-  def websocket_info({:send, frame}, req, state) do
-    {:reply, frame, req, state}
-  end
+  def websocket_info({:send, frame}, state),
+    do: {:reply, frame, state}
 
-  def websocket_info({:set_code, code}, req, state) do
+  def websocket_info({:set_code, code}, state) do
     Agent.update(state.agent_pid, fn _ -> code end)
-    {:ok, req, state}
+    {:ok, state}
   end
 
-  def websocket_info(:connection_wait, req, state) do
+  def websocket_info(:connection_wait, state) do
     Agent.update(state.agent_pid, fn _ -> :connection_wait end)
-    {:ok, req, state}
+    {:ok, state}
   end
 
-  def websocket_info(:immediate_reply, req, state) do
+  def websocket_info(:immediate_reply, state) do
     Agent.update(state.agent_pid, fn _ -> :immediate_reply end)
-    {:ok, req, state}
+    {:ok, state}
   end
 
-  def websocket_info(:shutdown, req, state) do
-    {:shutdown, req, state}
-  end
+  def websocket_info(:shutdown, state),
+    do: {:shutdown, state}
 
-  def websocket_info(_, req, state), do: {:ok, req, state}
+  def websocket_info(_, state),
+    do: {:ok, state}
 
   @dialyzer {:nowarn_function, immediate_reply: 1}
   defp immediate_reply(req) do

@@ -121,7 +121,7 @@ defmodule WebSockex.Conn do
       %URI{host: host, port: port, scheme: protocol}
       when is_nil(host)
       when is_nil(port)
-      when not (protocol in ["ws", "wss", "http", "https"]) ->
+      when protocol not in ["ws", "wss", "http", "https"] ->
         {:error, %WebSockex.URLError{url: url}}
 
       %URI{path: nil} = uri ->

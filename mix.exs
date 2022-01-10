@@ -35,8 +35,9 @@ defmodule WebSockex.Mixfile do
   defp deps do
     [
       {:ex_doc, "~> 0.14", only: :dev, runtime: false},
-      {:cowboy, "~> 1.0.0", only: :test},
-      {:plug, "~> 1.0", only: :test}
+      {:cowboy, "~> 2.9", only: :test},
+      {:plug_cowboy, "~> 2.5", only: :test},
+      {:plug, "~> 1.12", only: :test}
     ] ++ optional_deps(otp_release())
   end
 

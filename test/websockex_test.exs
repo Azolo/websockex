@@ -1304,7 +1304,8 @@ defmodule WebSockexTest do
 
       new_server_pid = WebSockex.TestServer.receive_socket_pid()
       send(new_server_pid, :connection_continue)
-      ^new_server_pid = WebSockex.TestServer.receive_socket_pid()
+
+      new_server_pid = WebSockex.TestServer.receive_socket_pid()
 
       send(new_server_pid, :send_ping)
       assert_receive :received_pong
