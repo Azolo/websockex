@@ -57,6 +57,16 @@ defmodule WebSockex.TestServer do
     end
   end
 
+  def new_conn_mode(socket_pid, mode) do
+    ref = make_ref()
+    send(socket_pid, {:mode, mode, ref, self()})
+
+    receive do
+      {^ref, :ok} ->
+        :ok
+    end
+  end
+
   def shutdown(ref) do
     Plug.Adapters.Cowboy.shutdown(ref)
   end
@@ -101,7 +111,7 @@ defmodule WebSockex.TestSocket do
       :ok ->
         {:cowboy_websocket, req, state}
 
-      int when is_integer(int) ->
+      {:code, int} when is_integer(int) ->
         :cowboy_req.reply(int, req)
         {:shutdown, req, :tests_are_fun}
 
@@ -121,9 +131,11 @@ defmodule WebSockex.TestSocket do
     end
   end
 
+  @impl true
   def websocket_init({:immediate_reply, state}) do
+    send(state.pid, self())
     frame = {:text, "Immediate Reply"}
-    {:reply, frame, state}
+    {[frame], state}
   end
 
   def websocket_init(state) do
@@ -142,9 +154,8 @@ defmodule WebSockex.TestSocket do
     :ok
   end
 
-  def terminate(reason, _, state) do
-    :ok
-  end
+  def terminate(_, _, _),
+    do: :ok
 
   @impl true
   def websocket_handle({:binary, msg}, state) do
@@ -187,18 +198,10 @@ defmodule WebSockex.TestSocket do
   def websocket_info({:send, frame}, state),
     do: {:reply, frame, state}
 
-  def websocket_info({:set_code, code}, state) do
-    Agent.update(state.agent_pid, fn _ -> code end)
-    {:ok, state}
-  end
+  def websocket_info({:mode, mode, ref, pid}, state) do
+    :ok = set_mode(state, mode)
+    send(pid, {ref, :ok})
 
-  def websocket_info(:connection_wait, state) do
-    Agent.update(state.agent_pid, fn _ -> :connection_wait end)
-    {:ok, state}
-  end
-
-  def websocket_info(:immediate_reply, state) do
-    Agent.update(state.agent_pid, fn _ -> :immediate_reply end)
     {:ok, state}
   end
 
@@ -208,31 +211,6 @@ defmodule WebSockex.TestSocket do
   def websocket_info(_, state),
     do: {:ok, state}
 
-  @dialyzer {:nowarn_function, immediate_reply: 1}
-  defp immediate_reply(req) do
-    socket = elem(req, 1)
-    transport = elem(req, 2)
-    {headers, _} = :cowboy_req.headers(req)
-    {_, key} = List.keyfind(headers, "sec-websocket-key", 0)
-
-    challenge =
-      :crypto.hash(:sha, key <> "258EAFA5-E914-47DA-95CA-C5AB0DC85B11") |> Base.encode64()
-
-    handshake =
-      [
-        "HTTP/1.1 101 Test Socket Upgrade",
-        "Connection: Upgrade",
-        "Upgrade: websocket",
-        "Sec-WebSocket-Accept: #{challenge}",
-        "\r\n"
-      ]
-      |> Enum.join("\r\n")
-
-    frame = <<1::1, 0::3, 1::4, 0::1, 15::7, "Immediate Reply">>
-    transport.send(socket, handshake)
-    Process.sleep(0)
-    transport.send(socket, frame)
-
-    Process.sleep(:infinity)
-  end
+  defp set_mode(%{agent_pid: agent}, mode),
+    do: Agent.update(agent, fn _ -> mode end)
 end

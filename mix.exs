@@ -23,7 +23,7 @@ defmodule WebSockex.Mixfile do
 
   def application do
     applications = [:logger, :ssl, :crypto] ++ applications(otp_release())
-    [applications: applications, mod: {WebSockex.Application, []}]
+    [extra_applications: applications, mod: {WebSockex.Application, []}]
   end
 
   defp applications(otp_release) when otp_release >= 21 do
@@ -34,7 +34,7 @@ defmodule WebSockex.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.14", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.27", only: :dev, runtime: false},
       {:cowboy, "~> 2.9", only: :test},
       {:plug_cowboy, "~> 2.5", only: :test},
       {:plug, "~> 1.12", only: :test}

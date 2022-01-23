@@ -3,6 +3,7 @@ defmodule WebSockexTest do
   doctest WebSockex
 
   alias WebSockex.TestClient
+  alias WebSockex.TestServer
 
   test "Set URI default ports for ws and wss" do
     assert URI.default_port("ws") == 80
@@ -17,12 +18,12 @@ defmodule WebSockexTest do
   end
 
   setup do
-    {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
+    {:ok, {server_ref, url}} = TestServer.start(self())
 
-    on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+    on_exit(fn -> TestServer.shutdown(server_ref) end)
 
     {:ok, pid} = TestClient.start_link(url, %{})
-    server_pid = WebSockex.TestServer.receive_socket_pid()
+    server_pid = TestServer.receive_socket_pid()
 
     [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
   end
@@ -47,7 +48,7 @@ defmodule WebSockexTest do
 
     test "can receive cast messages", context do
       {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: context.name)
-      WebSockex.TestServer.receive_socket_pid()
+      TestServer.receive_socket_pid()
 
       assert %{test: :yep, conn: _} = TestClient.get_state(context.name)
     end
@@ -73,7 +74,7 @@ defmodule WebSockexTest do
 
     test "can receive cast messages", context do
       {:ok, _} = TestClient.start_link(context.url, %{test: :yep}, name: context.name)
-      WebSockex.TestServer.receive_socket_pid()
+      TestServer.receive_socket_pid()
 
       assert %{test: :yep, conn: _} = TestClient.get_state(context.name)
     end
@@ -110,7 +111,7 @@ defmodule WebSockexTest do
       conn = WebSockex.Conn.new(URI.parse(context.url))
 
       assert {:ok, _} = WebSockex.start(conn, TestClient, %{catch_text: self()})
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
 
       send(server_pid, {:send, {:text, "Start Link Conn"}})
       assert_receive {:caught_text, "Start Link Conn"}
@@ -145,7 +146,7 @@ defmodule WebSockexTest do
       conn = WebSockex.Conn.new(URI.parse(context.url))
 
       assert {:ok, _} = WebSockex.start_link(conn, TestClient, %{catch_text: self()})
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
 
       send(server_pid, {:send, {:text, "Start Link Conn"}})
       assert_receive {:caught_text, "Start Link Conn"}
@@ -154,7 +155,7 @@ defmodule WebSockexTest do
     test "with async option", context do
       assert {:ok, _} = TestClient.start_link(context.url, %{catch_text: self()}, async: true)
 
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
 
       send(server_pid, {:send, {:text, "Hello"}})
       assert_receive {:caught_text, "Hello"}
@@ -184,11 +185,11 @@ defmodule WebSockexTest do
   end
 
   test "can handle initial connect headers" do
-    {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+    {:ok, {server_ref, url}} = TestServer.start_https(self())
 
-    on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+    on_exit(fn -> TestServer.shutdown(server_ref) end)
 
-    {:ok, pid} = TestClient.start_link(url, %{}, cacerts: WebSockex.TestServer.cacerts())
+    {:ok, pid} = TestClient.start_link(url, %{}, cacerts: TestServer.cacerts())
     conn = TestClient.get_conn(pid)
 
     headers = Enum.into(conn.resp_headers, %{})
@@ -200,12 +201,12 @@ defmodule WebSockexTest do
   end
 
   test "can connect to secure server" do
-    {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+    {:ok, {server_ref, url}} = TestServer.start_https(self())
 
-    on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+    on_exit(fn -> TestServer.shutdown(server_ref) end)
 
-    {:ok, pid} = TestClient.start_link(url, %{}, cacerts: WebSockex.TestServer.cacerts())
-    server_pid = WebSockex.TestServer.receive_socket_pid()
+    {:ok, pid} = TestClient.start_link(url, %{}, cacerts: TestServer.cacerts())
+    server_pid = TestServer.receive_socket_pid()
 
     TestClient.catch_attr(pid, :pong, self())
 
@@ -219,7 +220,7 @@ defmodule WebSockexTest do
   end
 
   test "handles a tcp message send right after connecting", context do
-    send(context.server_pid, :immediate_reply)
+    TestServer.new_conn_mode(context.server_pid, :immediate_reply)
 
     assert {:ok, _pid} = TestClient.start_link(context.url, %{catch_text: self()})
 
@@ -227,9 +228,9 @@ defmodule WebSockexTest do
   end
 
   test "handles a ssl message send right after connecting" do
-    {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+    {:ok, {server_ref, url}} = TestServer.start_https(self())
 
-    on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+    on_exit(fn -> TestServer.shutdown(server_ref) end)
 
     {:ok, _pid} =
       TestClient.start_link(url, %{},
@@ -244,9 +245,8 @@ defmodule WebSockexTest do
         ]
       )
 
-    server_pid = WebSockex.TestServer.receive_socket_pid()
-
-    send(server_pid, :immediate_reply)
+    TestServer.receive_socket_pid()
+    |> TestServer.new_conn_mode(:immediate_reply)
 
     assert {:ok, _pid} = TestClient.start_link(url, %{catch_text: self()})
 
@@ -391,12 +391,12 @@ defmodule WebSockexTest do
     end
 
     test "returns an error while opening", context do
-      send(context.server_pid, :connection_wait)
+      TestServer.new_conn_mode(context.server_pid, :connection_wait)
       TestClient.set_attr(context.pid, :reconnect, true)
 
       WebSockex.cast(context.pid, :close)
 
-      WebSockex.TestServer.receive_socket_pid()
+      TestServer.receive_socket_pid()
 
       assert WebSockex.send_frame(context.pid, {:text, "Test"}) ==
                {:error, %WebSockex.NotConnectedError{connection_state: :opening}}
@@ -915,8 +915,8 @@ defmodule WebSockexTest do
       assert_receive :caught_disconnect
 
       # Test HTTPS
-      {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
-      on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+      {:ok, {server_ref, url}} = TestServer.start_https(self())
+      on_exit(fn -> TestServer.shutdown(server_ref) end)
 
       {:ok, pid} = TestClient.start_link(url, %{})
       Process.unlink(pid)
@@ -978,7 +978,7 @@ defmodule WebSockexTest do
 
       assert_receive {4985, "Testing Reconnect"}
 
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
       send(server_pid, {:send, {:text, "Hello"}})
 
       assert_receive {:caught_text, "Hello"}, 500
@@ -987,7 +987,7 @@ defmodule WebSockexTest do
     test "can attempt to reconnect multiple times", %{pid: client_pid} = context do
       WebSockex.cast(client_pid, {:set_attr, :multiple_reconnect, self()})
 
-      send(context.server_pid, {:set_code, 403})
+      TestServer.new_conn_mode(context.server_pid, {:code, 403})
       send(context.server_pid, :shutdown)
 
       assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, attempt_number: 1}}
@@ -1005,17 +1005,17 @@ defmodule WebSockexTest do
     end
 
     test "can provide new conn struct during reconnect", context do
-      {:ok, {server_ref, new_url}} = WebSockex.TestServer.start(self())
-      on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
+      {:ok, {server_ref, new_url}} = TestServer.start(self())
+      on_exit(fn -> TestServer.shutdown(server_ref) end)
 
       WebSockex.cast(context.pid, {:set_attr, :change_conn_reconnect, self()})
       WebSockex.cast(context.pid, {:set_attr, :good_url, new_url})
       TestClient.catch_attr(context.pid, :text, self())
 
-      send(context.server_pid, {:set_code, 403})
+      TestServer.new_conn_mode(context.server_pid, {:code, 403})
       send(context.server_pid, :shutdown)
 
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
 
       assert_received :retry_change_conn
 
@@ -1061,7 +1061,7 @@ defmodule WebSockexTest do
 
       assert_receive {:caught_disconnect, :reconnecting}
 
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
       send(server_pid, {:send, {:text, "Hello"}})
 
       assert_receive {:caught_text, "Hello"}
@@ -1127,7 +1127,7 @@ defmodule WebSockexTest do
                  handle_initial_conn_failure: true
                )
 
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
 
       assert_received :retry_change_conn
 
@@ -1203,7 +1203,7 @@ defmodule WebSockexTest do
   describe "default implementation errors" do
     setup context do
       {:ok, pid} = WebSockex.start_link(context.url, BareClient, %{})
-      server_pid = WebSockex.TestServer.receive_socket_pid()
+      server_pid = TestServer.receive_socket_pid()
 
       [pid: pid, server_pid: server_pid]
     end
@@ -1255,10 +1255,10 @@ defmodule WebSockexTest do
 
       WebSockex.cast(pid, {:set_attr, :reconnect, true})
       TestClient.catch_attr(pid, :terminate, self())
-      send(context.server_pid, :connection_wait)
+      TestServer.new_conn_mode(context.server_pid, :connection_wait)
       send(context.server_pid, :close)
 
-      _new_server_pid = WebSockex.TestServer.receive_socket_pid()
+      _new_server_pid = TestServer.receive_socket_pid()
 
       {:data, data} =
         elem(:sys.get_status(pid), 3)
@@ -1274,7 +1274,7 @@ defmodule WebSockexTest do
 
     test "a parent exit signal doesn't call terminate on initial connect", context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, :connection_wait)
+      TestServer.new_conn_mode(context.server_pid, :connection_wait)
 
       {:ok, pid} = TestClient.start_link(context.url, %{catch_terminate: self()}, async: true)
 
@@ -1291,7 +1291,7 @@ defmodule WebSockexTest do
     end
 
     test "can send system messages while connecting", context do
-      send(context.server_pid, :connection_wait)
+      TestServer.new_conn_mode(context.server_pid, :connection_wait)
 
       {:ok, pid} = WebSockex.start_link(context.url, BareClient, [], async: true)
 
@@ -1302,10 +1302,10 @@ defmodule WebSockexTest do
 
       assert {"Connection Status", :connecting} in data
 
-      new_server_pid = WebSockex.TestServer.receive_socket_pid()
+      new_server_pid = TestServer.receive_socket_pid()
       send(new_server_pid, :connection_continue)
 
-      new_server_pid = WebSockex.TestServer.receive_socket_pid()
+      new_server_pid = TestServer.receive_socket_pid()
 
       send(new_server_pid, :send_ping)
       assert_receive :received_pong

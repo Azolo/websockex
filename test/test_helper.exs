@@ -1,3 +1,4 @@
-ExUnit.start(capture_log: true)
+for app <- [:cowboy, :plug],
+    do: Application.ensure_all_started(app)
 
-Application.ensure_all_started(:cowboy)
+ExUnit.start(capture_log: true)
