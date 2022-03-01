@@ -1010,6 +1010,27 @@ defmodule WebSockex do
     end
   end
 
+  defp open_connection(parent, debug, %{conn: conn, proxy_host: nil} = state) do
+    my_pid = self()
+    debug = Utils.sys_debug(debug, :connect, state)
+
+    task =
+      Task.async(fn ->
+        with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
+             key <- :crypto.strong_rand_bytes(16) |> Base.encode64(),
+             {:ok, request} <- WebSockex.Conn.build_request(conn, key),
+             :ok <- WebSockex.Conn.socket_send(conn, request),
+             {:ok, headers} <- WebSockex.Conn.handle_response(conn, my_pid),
+             :ok <- validate_handshake(headers, key) do
+          :ok = WebSockex.Conn.controlling_process(conn, my_pid)
+          :ok = WebSockex.Conn.set_active(conn)
+          {:ok, conn}
+        end
+      end)
+
+    open_loop(parent, debug, Map.put(state, :task, task))
+  end
+
   defp open_connection(parent, debug, %{conn: conn} = state) do
     my_pid = self()
     debug = Utils.sys_debug(debug, :connect, state)
@@ -1018,6 +1039,9 @@ defmodule WebSockex do
       Task.async(fn ->
         with {:ok, conn} <- WebSockex.Conn.open_socket(conn),
              key <- :crypto.strong_rand_bytes(16) |> Base.encode64(),
+             {:ok, proxy_request} <- WebSockex.Conn.build_proxy_request(conn, conn.proxy_username, conn.proxy_password),
+             :ok <- WebSockex.Conn.socket_send(conn, proxy_request),
+             {:ok, _proxy_headers} <- WebSockex.Conn.handle_proxy_response(conn),
              {:ok, request} <- WebSockex.Conn.build_request(conn, key),
              :ok <- WebSockex.Conn.socket_send(conn, request),
              {:ok, headers} <- WebSockex.Conn.handle_response(conn, my_pid),

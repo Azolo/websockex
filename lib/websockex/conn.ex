@@ -23,7 +23,11 @@ defmodule WebSockex.Conn do
             cacerts: nil,
             insecure: true,
             resp_headers: [],
-            ssl_options: nil
+            ssl_options: nil,
+            proxy_host: nil,
+            proxy_port: 0,
+            proxy_username: nil,
+            proxy_password: nil
 
   @type socket :: :gen_tcp.socket() | :ssl.sslsocket()
   @type header :: {field :: String.t(), value :: String.t()}
@@ -95,7 +99,11 @@ defmodule WebSockex.Conn do
       socket_connect_timeout:
         Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
       socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
-      ssl_options: Keyword.get(opts, :ssl_options, nil)
+      ssl_options: Keyword.get(opts, :ssl_options, nil),
+      proxy_host: Keyword.get(opts, :proxy_host, nil),
+      proxy_port: Keyword.get(opts, :proxy_port, 3128),
+      proxy_username: Keyword.get(opts, :proxy_username, nil),
+      proxy_password: Keyword.get(opts, :proxy_password, nil)
     }
   end
 
@@ -149,7 +157,7 @@ defmodule WebSockex.Conn do
   @spec open_socket(__MODULE__.t()) :: {:ok, __MODULE__.t()} | {:error, term}
   def open_socket(conn)
 
-  def open_socket(%{conn_mod: :gen_tcp} = conn) do
+  def open_socket(%{conn_mod: :gen_tcp, proxy_host: nil} = conn) do
     case :gen_tcp.connect(
            String.to_charlist(conn.host),
            conn.port,
@@ -169,6 +177,21 @@ defmodule WebSockex.Conn do
            String.to_charlist(conn.host),
            conn.port,
            ssl_connection_options(conn),
+           conn.socket_connect_timeout
+         ) do
+      {:ok, socket} ->
+        {:ok, Map.put(conn, :socket, socket)}
+
+      {:error, error} ->
+        {:error, %WebSockex.ConnError{original: error}}
+    end
+  end
+
+  def open_socket(%{conn_mod: :gen_tcp} = conn) do
+    case :gen_tcp.connect(
+           String.to_charlist(conn.proxy_host),
+           conn.proxy_port,
+           [:binary, active: false, packet: 0],
            conn.socket_connect_timeout
          ) do
       {:ok, socket} ->
@@ -219,6 +242,24 @@ defmodule WebSockex.Conn do
     {:ok, request <> "\r\n\r\n"}
   end
 
+  def build_proxy_request(conn, proxy_username, proxy_password) do
+    headers =
+      [{"Host", conn.host}, {"Proxy-Connection", "keep-alive"}]
+      |> Enum.map(&format_header/1)
+
+    if proxy_username != nil and proxy_password != nil do
+    end
+
+    proxy_credentials = "c3Q1YXY1b2wwd2Rsbms6aW02aTFyNmRoc2pqemc3ZHdtcDRhM2R1dHg="
+    headers = [format_header({"Proxy-Authorization", "Basic #{proxy_credentials}"}) | headers]
+
+    request =
+      ["CONNECT #{conn.host}:#{conn.port} HTTP/1.1" | headers]
+      |> Enum.join("\r\n")
+
+    {:ok, request <> "\r\n\r\n"}
+  end
+
   @doc """
   Waits for the request response, decodes the packet, and returns the response
   headers.
@@ -233,6 +274,20 @@ defmodule WebSockex.Conn do
       # Send excess buffer back to the process
       unless buffer == "" do
         send(owner_pid, {transport(conn.conn_mod), conn.socket, buffer})
+      end
+
+      {:ok, headers}
+    end
+  end
+
+  @spec handle_proxy_response(__MODULE__.t()) ::
+          {:ok, [header]} | {:error, reason :: term}
+  def handle_proxy_response(conn) do
+    with {:ok, buffer} <- wait_for_response(conn),
+         {:ok, headers, buffer} <- decode_proxy_response(buffer) do
+      # Send excess buffer back to the process
+      unless buffer == "" do
+        send(self(), {transport(conn.conn_mod), conn.socket, buffer})
       end
 
       {:ok, headers}
@@ -297,6 +352,19 @@ defmodule WebSockex.Conn do
   defp decode_response(response) do
     case :erlang.decode_packet(:http_bin, response, []) do
       {:ok, {:http_response, _version, 101, _message}, rest} ->
+        decode_headers(rest)
+
+      {:ok, {:http_response, _, code, message}, _} ->
+        {:error, %WebSockex.RequestError{code: code, message: message}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp decode_proxy_response(response) do
+    case :erlang.decode_packet(:http_bin, response, []) do
+      {:ok, {:http_response, _version, 200, _message}, rest} ->
         decode_headers(rest)
 
       {:ok, {:http_response, _, code, message}, _} ->
