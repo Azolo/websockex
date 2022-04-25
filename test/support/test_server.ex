@@ -208,9 +208,6 @@ defmodule WebSockex.TestSocket do
   def websocket_info(:shutdown, state),
     do: {:shutdown, state}
 
-  def websocket_info(_, state),
-    do: {:ok, state}
-
   defp set_mode(%{agent_pid: agent}, mode),
     do: Agent.update(agent, fn _ -> mode end)
 end
