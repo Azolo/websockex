@@ -87,6 +87,7 @@ defmodule WebSockex.TestClient do
 
   def handle_cast({:set_state, state}, _state), do: {:ok, state}
   def handle_cast({:set_attr, key, attr}, state), do: {:ok, Map.put(state, key, attr)}
+
   def handle_cast({:set_attr, key, attr, pid}, state) do
     send(pid, {:set_attr, key})
     {:ok, Map.put(state, key, attr)}
@@ -98,6 +99,7 @@ defmodule WebSockex.TestClient do
   end
 
   def handle_cast({:send, frame}, state), do: {:reply, frame, state}
+  def handle_cast({:send, frame, ref}, state), do: {:reply, frame, ref, state}
   def handle_cast(:close, state), do: {:close, state}
   def handle_cast({:close, code, reason}, state), do: {:close, {code, reason}, state}
 
@@ -184,7 +186,6 @@ defmodule WebSockex.TestClient do
   def handle_disconnect(_, %{disconnect_error: true}), do: raise("Disconnect Error")
   def handle_disconnect(_, %{disconnect_exit: true}), do: exit("Disconnect Exit")
 
-
   def handle_disconnect(failure_map, %{multiple_reconnect: pid} = state) do
     send(pid, {:disconnect_status, failure_map})
 
@@ -250,6 +251,19 @@ defmodule WebSockex.TestClient do
   end
 
   def handle_disconnect(_, state), do: {:ok, state}
+
+  def handle_send_result(result, frame, key, %{catch_result: pid} = state) do
+    send(pid, {:caught_result, result, frame, key})
+
+    receive do
+      {:continue_result, :ok} -> {:ok, state}
+      {:continue_result, :close} -> {:close, state}
+    end
+  end
+
+  def handle_send_result(result, frame, key, state) do
+    super(result, frame, key, state)
+  end
 
   def terminate({:local, :normal}, %{catch_terminate: pid}),
     do: send(pid, :normal_close_terminate)

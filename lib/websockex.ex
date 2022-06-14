@@ -128,6 +128,11 @@ defmodule WebSockex do
           conn: WebSockex.Conn.t()
         }
 
+  @typedoc """
+  A key used to correlate a result with a send request
+  """
+  @type send_key :: term
+
   @doc """
   Invoked after a connection is established.
 
@@ -144,6 +149,7 @@ defmodule WebSockex do
   @callback handle_frame(frame, state :: term) ::
               {:ok, new_state}
               | {:reply, frame, new_state}
+              | {:reply, frame, send_key, new_state}
               | {:close, new_state}
               | {:close, close_frame, new_state}
             when new_state: term
@@ -154,6 +160,7 @@ defmodule WebSockex do
   @callback handle_cast(msg :: term, state :: term) ::
               {:ok, new_state}
               | {:reply, frame, new_state}
+              | {:reply, frame, send_key, new_state}
               | {:close, new_state}
               | {:close, close_frame, new_state}
             when new_state: term
@@ -164,9 +171,20 @@ defmodule WebSockex do
   @callback handle_info(msg :: term, state :: term) ::
               {:ok, new_state}
               | {:reply, frame, new_state}
+              | {:reply, frame, send_key, new_state}
               | {:close, new_state}
               | {:close, close_frame, new_state}
             when new_state: term
+
+  @doc """
+  Invoked to handle all results for sending messages via `:reply`
+  """
+  @callback handle_send_result(result, frame, send_key, state :: term) ::
+              {:ok, new_state}
+              | {:close, new_state}
+              | {:close, close_frame, new_state}
+            when new_state: term,
+                 result: :ok | {:error, term}
 
   @doc """
   Invoked when the WebSocket disconnects from the server.
@@ -239,6 +257,7 @@ defmodule WebSockex do
   defmacro __using__(opts) do
     quote location: :keep do
       @behaviour WebSockex
+      require Logger
 
       if Kernel.function_exported?(Supervisor, :child_spec, 2) do
         @doc false
@@ -290,6 +309,17 @@ defmodule WebSockex do
       end
 
       @doc false
+      def handle_send_result(:ok, frame, key, state) do
+        {:ok, state}
+      end
+
+      @doc false
+      def handle_send_result({:error, reason}, frame, key, state) do
+        Logger.warning("[WebSockex] A message failed to send because: #{inspect(reason)}")
+        {:close, state}
+      end
+
+      @doc false
       def handle_ping(:ping, state) do
         {:reply, :pong, state}
       end
@@ -315,6 +345,7 @@ defmodule WebSockex do
                      handle_ping: 2,
                      handle_pong: 2,
                      handle_disconnect: 2,
+                     handle_send_result: 4,
                      terminate: 2,
                      code_change: 3
     end
@@ -438,20 +469,8 @@ defmodule WebSockex do
   ## OTP Stuffs
 
   @doc false
-  def system_continue(parent, debug, %{connection_status: :connected} = state) do
-    websocket_loop(parent, debug, Map.delete(state, :connection_status))
-  end
-
-  def system_continue(parent, debug, %{connection_status: :connecting} = state) do
-    open_loop(parent, debug, Map.delete(state, :connection_status))
-  end
-
-  def system_continue(parent, debug, %{connection_status: {:closing, reason}} = state) do
-    close_loop(reason, parent, debug, Map.delete(state, :connection_status))
-  end
-
-  def system_continue(parent, debug, %{connection_status: :backoff} = state) do
-    backoff_loop(parent, debug, Map.delete(state, :connection_status))
+  def system_continue(parent, debug, state) do
+    loop(parent, debug, state)
   end
 
   @doc false
@@ -551,12 +570,11 @@ defmodule WebSockex do
 
   # Loops
 
-  defp open_loop(parent, debug, state) do
+  defp loop(parent, debug, %{connection_status: :connecting} = state) do
     %{task: %{ref: ref}} = state
 
     receive do
       {:system, from, req} ->
-        state = Map.put(state, :connection_status, :connecting)
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
 
       {:EXIT, ^parent, reason} ->
@@ -578,17 +596,16 @@ defmodule WebSockex do
     end
   end
 
-  defp backoff_loop(parent, debug, state) do
+  defp loop(parent, debug, %{connection_status: :backoff} = state) do
     %{backoff: backoff} = state
 
     receive do
       {:system, from, req} ->
-        state = Map.put(state, :connection_status, :backoff)
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
 
       {:"$websockex_send", from, _frame} ->
         :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :backoff}})
-        backoff_loop(parent, debug, state)
+        loop(parent, debug, state)
 
       {:"$websockex_cast", msg} ->
         debug = Utils.sys_debug(debug, {:in, :cast, msg}, state)
@@ -599,10 +616,14 @@ defmodule WebSockex do
 
       {:timeout, ^backoff, :backoff} ->
         connect(parent, debug, %{state | backoff: nil})
+
+      msg ->
+        debug = Utils.sys_debug(debug, {:in, :msg, msg}, state)
+        common_handle({:handle_info, msg}, parent, debug, state)
     end
   end
 
-  defp websocket_loop(parent, debug, state) do
+  defp loop(parent, debug, %{connection_status: :connected} = state) do
     case WebSockex.Frame.parse_frame(state.buffer) do
       {:ok, frame, buffer} ->
         debug = Utils.sys_debug(debug, {:in, :frame, frame}, state)
@@ -617,7 +638,6 @@ defmodule WebSockex do
 
         receive do
           {:system, from, req} ->
-            state = Map.put(state, :connection_status, :connected)
             :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
 
           {:"$websockex_cast", msg} ->
@@ -629,7 +649,7 @@ defmodule WebSockex do
 
           {^transport, ^socket, message} ->
             buffer = <<state.buffer::bitstring, message::bitstring>>
-            websocket_loop(parent, debug, %{state | buffer: buffer})
+            loop(parent, debug, %{state | buffer: buffer})
 
           {:tcp_closed, ^socket} ->
             handle_close({:remote, :closed}, parent, debug, state)
@@ -647,7 +667,11 @@ defmodule WebSockex do
     end
   end
 
-  defp close_loop(reason, parent, debug, %{conn: conn, timer_ref: timer_ref} = state) do
+  defp loop(
+         parent,
+         debug,
+         %{conn: conn, timer_ref: timer_ref, connection_status: {:closing, reason}} = state
+       ) do
     transport = state.conn.transport
     socket = state.conn.socket
     state = cancel_backoff(state)
@@ -661,11 +685,11 @@ defmodule WebSockex do
         terminate(reason, parent, debug, state)
 
       {^transport, ^socket, _} ->
-        close_loop(reason, parent, debug, state)
+        loop(parent, debug, state)
 
       {:"$websockex_send", from, _frame} ->
         :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :closing}})
-        close_loop(reason, parent, debug, state)
+        loop(parent, debug, state)
 
       {close_mod, ^socket} when close_mod in [:tcp_closed, :ssl_closed] ->
         new_conn = %{conn | socket: nil}
@@ -724,7 +748,7 @@ defmodule WebSockex do
   end
 
   defp handle_fragment({:fragment, type, part}, parent, debug, %{fragment: nil} = state) do
-    websocket_loop(parent, debug, %{state | fragment: {type, part}})
+    loop(parent, debug, %{state | fragment: {type, part}})
   end
 
   defp handle_fragment({:fragment, _, _}, parent, debug, state) do
@@ -746,7 +770,7 @@ defmodule WebSockex do
   end
 
   defp handle_fragment({:continuation, next}, parent, debug, %{fragment: {type, part}} = state) do
-    websocket_loop(parent, debug, %{state | fragment: {type, <<part::binary, next::binary>>}})
+    loop(parent, debug, %{state | fragment: {type, <<part::binary, next::binary>>}})
   end
 
   defp handle_fragment({:finish, next}, parent, debug, %{fragment: {type, part}} = state) do
@@ -786,22 +810,15 @@ defmodule WebSockex do
 
     case result do
       {:ok, new_state} ->
-        websocket_loop(parent, debug, %{state | module_state: new_state})
+        loop(parent, debug, %{state | module_state: new_state})
 
       {:reply, frame, new_state} ->
-        # A `with` that includes `else` clause isn't tail recursive (elixir-lang/elixir#6251)
-        res =
-          with {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
-               do: WebSockex.Conn.socket_send(state.conn, binary_frame)
+        debug = Utils.sys_debug(debug, {:reply, function, frame, nil}, state)
+        do_send(frame, nil, parent, debug, %{state | module_state: new_state})
 
-        case res do
-          :ok ->
-            debug = Utils.sys_debug(debug, {:reply, function, frame}, state)
-            websocket_loop(parent, debug, %{state | module_state: new_state})
-
-          {:error, error} ->
-            handle_close({:error, error}, parent, debug, %{state | module_state: new_state})
-        end
+      {:reply, frame, ref, new_state} ->
+        debug = Utils.sys_debug(debug, {:reply, function, frame, ref}, state)
+        do_send(frame, ref, parent, debug, %{state | module_state: new_state})
 
       {:close, new_state} ->
         handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
@@ -838,7 +855,12 @@ defmodule WebSockex do
       end
 
     timer_ref = Process.send_after(self(), :"$websockex_close_timeout", 5000)
-    close_loop(reason, parent, debug, Map.put(state, :timer_ref, timer_ref))
+
+    loop(
+      parent,
+      debug,
+      Map.merge(state, %{timer_ref: timer_ref, connection_status: {:closing, reason}})
+    )
   end
 
   defp handle_local_close(reason, parent, debug, state) do
@@ -848,7 +870,12 @@ defmodule WebSockex do
       :ok ->
         debug = Utils.sys_debug(debug, {:socket_out, :close, reason}, state)
         timer_ref = Process.send_after(self(), :"$websockex_close_timeout", 5000)
-        close_loop(reason, parent, debug, Map.put(state, :timer_ref, timer_ref))
+
+        loop(
+          parent,
+          debug,
+          Map.merge(state, %{timer_ref: timer_ref, connection_status: {:closing, reason}})
+        )
 
       {:error, %WebSockex.ConnError{original: reason}} when reason in [:closed, :einval] ->
         handle_close({:remote, :closed}, parent, debug, state)
@@ -859,7 +886,12 @@ defmodule WebSockex do
     send_close_frame(:error, state.conn)
 
     timer_ref = Process.send_after(self(), :"$websockex_close_timeout", 5000)
-    close_loop(reason, parent, debug, Map.put(state, :timer_ref, timer_ref))
+
+    loop(
+      parent,
+      debug,
+      Map.merge(state, %{timer_ref: timer_ref, connection_status: {:closing, reason}})
+    )
   end
 
   @spec handle_terminate_close(any, pid, any, any) :: no_return
@@ -891,7 +923,7 @@ defmodule WebSockex do
 
         :gen.reply(from, :ok)
         debug = Utils.sys_debug(debug, {:socket_out, :sync_send, frame}, state)
-        websocket_loop(parent, debug, state)
+        loop(parent, debug, state)
 
       {:error, %WebSockex.ConnError{original: reason}} = error
       when reason in [:closed, :einval] ->
@@ -900,7 +932,34 @@ defmodule WebSockex do
 
       {:error, _} = error ->
         :gen.reply(from, error)
-        websocket_loop(parent, debug, state)
+        loop(parent, debug, state)
+    end
+  end
+
+  defp do_send(frame, key, parent, debug, %{connection_status: connection_status} = state) do
+    # A `with` that includes `else` clause isn't tail recursive (elixir-lang/elixir#6251)
+    res =
+      with true <-
+             connection_status == :connected ||
+               {:error, %WebSockex.NotConnectedError{connection_state: connection_status}},
+           {:ok, binary_frame} <- WebSockex.Frame.encode_frame(frame),
+           do: WebSockex.Conn.socket_send(state.conn, binary_frame)
+
+    case handle_send_result(res, frame, key, state) do
+      {:ok, new_state} ->
+        loop(parent, debug, %{state | module_state: new_state})
+
+      {:close, new_state} ->
+        handle_close({:local, :normal}, parent, debug, %{state | module_state: new_state})
+
+      {:close, {close_code, message}, new_state} ->
+        handle_close({:local, close_code, message}, parent, debug, %{
+          state
+          | module_state: new_state
+        })
+
+      {:"$EXIT", reason} ->
+        terminate(reason, parent, debug, state)
     end
   end
 
@@ -933,8 +992,16 @@ defmodule WebSockex do
 
       {:backoff, backoff_timeout, new_conn, new_module_state} ->
         backoff = start_backoff(backoff_timeout)
-        state = %{state | conn: new_conn, backoff: backoff, module_state: new_module_state}
-        backoff_loop(parent, debug, state)
+
+        state = %{
+          state
+          | conn: new_conn,
+            backoff: backoff,
+            module_state: new_module_state,
+            connection_status: :backoff
+        }
+
+        loop(parent, debug, state)
 
       {:"$EXIT", reason} ->
         terminate(reason, parent, debug, state)
@@ -966,7 +1033,7 @@ defmodule WebSockex do
           })
 
         execute_telemetry([:websockex, :connected], state)
-        websocket_loop(parent, debug, state)
+        loop(parent, debug, %{state | connection_status: :connected})
 
       {:"$EXIT", reason} ->
         terminate(reason, parent, debug, state)
@@ -1001,7 +1068,7 @@ defmodule WebSockex do
         end
       end)
 
-    open_loop(parent, debug, Map.put(state, :task, task))
+    loop(parent, debug, Map.merge(state, %{task: task, connection_status: :connecting}))
   end
 
   # Other State Functions
@@ -1057,6 +1124,33 @@ defmodule WebSockex do
            module: state.module,
            function: :handle_disconnect,
            args: [status_map, state.module_state],
+           response: badreply
+         }}
+    end
+  end
+
+  defp handle_send_result(result, frame, key, state) do
+    result = try_callback(state.module, :handle_send_result, [result, frame, key, state.module_state])
+
+    case result do
+      {:ok, new_state} ->
+        {:ok, new_state}
+
+      {:close, new_state} ->
+        {:close, new_state}
+
+      {:close, close_frame, new_state} ->
+        {:close, close_frame, new_state}
+
+      {:"$EXIT", _} = res ->
+        res
+
+      badreply ->
+        {:"$EXIT",
+         %WebSockex.BadResponseError{
+           module: state.module,
+           function: :handle_send_result,
+           args: [result, frame, state.module_state],
            response: badreply
          }}
     end

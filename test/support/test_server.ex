@@ -157,6 +157,12 @@ defmodule WebSockex.TestSocket do
     {:ok, state}
   end
 
+  @impl true
+  def websocket_handle({:text, _msg} = frame, state) do
+    send(state.pid, {:server_received_frame, frame})
+    {:ok, state}
+  end
+
   def websocket_handle(:ping, state),
     do: {:ok, state}
 

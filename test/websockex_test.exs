@@ -448,10 +448,10 @@ defmodule WebSockexTest do
     test "handles errors while replying properly", context do
       Process.flag(:trap_exit, true)
       TestClient.catch_attr(context.pid, :disconnect, self())
+      TestClient.catch_attr(context.pid, :result, self())
       WebSockex.cast(context.pid, :bad_frame)
 
-      assert_receive {1011, ""}
-      assert_receive {:EXIT, _, %WebSockex.InvalidFrameError{}}
+      assert_receive {:caught_result, {:error, %WebSockex.InvalidFrameError{}}, _, _}
     end
 
     test "handles dead connections when replying", context do
@@ -466,8 +466,8 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
-      assert_received :caught_disconnect
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_received {:caught_disconnect, {:remote, :closed}}
     end
   end
 
@@ -519,8 +519,133 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
-      assert_received :caught_disconnect
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_received {:caught_disconnect, {:remote, :closed}}
+    end
+  end
+
+  describe "handle_send_result" do
+    test "successful reply ok", context do
+      TestClient.catch_attr(context.pid, :result, self())
+      frame = {:text, "Hello world"}
+      ref = make_ref()
+      WebSockex.cast(context.pid, {:send, frame, ref})
+
+      assert_receive {:server_received_frame, ^frame}
+      assert_receive {:caught_result, :ok, ^frame, ^ref}
+      send(context.pid, {:continue_result, :ok})
+    end
+
+    test "successful reply no ref ok", context do
+      TestClient.catch_attr(context.pid, :result, self())
+      frame = {:text, "Hello world"}
+      WebSockex.cast(context.pid, {:send, frame})
+
+      assert_receive {:server_received_frame, ^frame}
+      assert_receive {:caught_result, :ok, ^frame, nil}
+      send(context.pid, {:continue_result, :ok})
+    end
+
+    test "successful reply close", context do
+      Process.flag(:trap_exit, true)
+      TestClient.catch_attr(context.pid, :result, self())
+      TestClient.catch_attr(context.pid, :disconnect, self())
+      frame = {:text, "Hello world"}
+      ref = make_ref()
+      WebSockex.cast(context.pid, {:send, frame, ref})
+
+      assert_receive {:server_received_frame, ^frame}
+      assert_receive {:caught_result, :ok, ^frame, ^ref}
+
+      send(context.pid, {:continue_result, :close})
+
+      assert_receive :caught_disconnect
+      assert_receive {:EXIT, _, :normal}
+    end
+
+    test "failed reply connection closed close", context do
+      Process.flag(:trap_exit, true)
+      %{socket: socket} = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :result, self())
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      frame = {:text, "It's Closed"}
+      ref = make_ref()
+      WebSockex.cast(context.pid, {:send, frame, ref})
+
+      :gen_tcp.shutdown(socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:caught_result, {:error, %WebSockex.ConnError{}}, ^frame, ^ref}
+      send(context.pid, {:continue_result, :close})
+
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_receive {:caught_disconnect, {:remote, :closed}}
+    end
+
+    test "failed reply connection closed ok", context do
+      Process.flag(:trap_exit, true)
+      %{socket: socket} = TestClient.get_conn(context.pid)
+      TestClient.catch_attr(context.pid, :result, self())
+      TestClient.catch_attr(context.pid, :disconnect, self())
+
+      :sys.suspend(context.pid)
+
+      frame = {:text, "It's Closed"}
+      ref = make_ref()
+      WebSockex.cast(context.pid, {:send, frame, ref})
+
+      :gen_tcp.shutdown(socket, :write)
+
+      :sys.resume(context.pid)
+
+      assert_receive {:caught_result, {:error, %WebSockex.ConnError{}}, ^frame, ^ref}
+      send(context.pid, {:continue_result, :ok})
+
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_receive {:caught_disconnect, {:remote, :closed}}
+    end
+
+    test "failed reply frame error ok", context do
+      Process.flag(:trap_exit, true)
+      TestClient.catch_attr(context.pid, :result, self())
+
+      frame = {:foo, "bad frame"}
+      ref = make_ref()
+      WebSockex.cast(context.pid, {:send, frame, ref})
+
+      assert_receive {:caught_result, {:error, %WebSockex.InvalidFrameError{frame: ^frame}},
+                      ^frame, ^ref}
+
+      send(context.pid, {:continue_result, :ok})
+
+      refute_receive {:EXIT, _, _}
+    end
+
+    test "failed reply backoff ok", context do
+      Process.flag(:trap_exit, true)
+      TestClient.catch_attr(context.pid, :result, self())
+      TestClient.catch_attr(context.pid, :disconnect, self())
+      TestClient.set_attr(context.pid, :backoff, :infinity)
+      %{socket: socket} = TestClient.get_conn(context.pid)
+
+      :gen_tcp.shutdown(socket, :write)
+      assert_receive :caught_disconnect
+
+      frame = {:text, "backoff"}
+      ref = make_ref()
+      WebSockex.cast(context.pid, {:send, frame, ref})
+
+      assert_receive {:caught_result,
+                      {:error, %WebSockex.NotConnectedError{connection_state: :backoff}}, ^frame,
+                      ^ref}
+
+      send(context.pid, {:continue_result, :ok})
+
+      refute_receive {:EXIT, _, _}
     end
   end
 
@@ -564,8 +689,8 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
-      assert_received :caught_disconnect
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_received {:caught_disconnect, {:remote, :closed}}
     end
   end
 
@@ -832,8 +957,8 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
-      assert_received :caught_disconnect
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_received {:caught_disconnect, {:remote, :closed}}
     end
   end
 
@@ -866,8 +991,8 @@ defmodule WebSockexTest do
 
       :sys.resume(context.pid)
 
-      assert_receive {:EXIT, _, %WebSockex.ConnError{}}
-      assert_received :caught_disconnect
+      assert_receive {:EXIT, _, {:remote, :closed}}
+      assert_received {:caught_disconnect, {:remote, :closed}}
     end
   end
 

@@ -106,10 +106,10 @@ defmodule WebSockex.Utils do
     IO.puts(io_dev, "*DBG* #{inspect(name)} received msg: #{inspect(msg)}")
   end
 
-  defp print_event(io_dev, {:reply, func, frame}, %{name: name}) do
+  defp print_event(io_dev, {:reply, func, frame, ref}, %{name: name}) do
     IO.puts(
       io_dev,
-      "*DBG* #{inspect(name)} replying from #{inspect(func)} with #{inspect(frame)}"
+      "*DBG* #{inspect(name)} replying from #{inspect(func)} with ref #{inspect(ref)}: #{inspect(frame)}"
     )
   end
 

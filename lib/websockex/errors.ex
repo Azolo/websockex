@@ -143,3 +143,13 @@ defmodule WebSockex.CallingSelfError do
     "Process attempted to call itself."
   end
 end
+
+defmodule WebSockex.SendFrameError do
+  defexception [:reason, :message]
+
+  def message(%__MODULE__{}) do
+    """
+    Error sending frame
+    """
+  end
+end
