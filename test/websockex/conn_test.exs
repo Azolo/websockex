@@ -2,7 +2,7 @@ defmodule WebSockex.ConnTest do
   use ExUnit.Case, async: true
 
   setup do
-    {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
+    {:ok, {_, server_ref, url}} = WebSockex.TestServer.start(self())
 
     on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
@@ -137,7 +137,7 @@ defmodule WebSockex.ConnTest do
 
   describe "secure connection" do
     setup do
-      {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+      {:ok, {_, server_ref, url}} = WebSockex.TestServer.start_https(self())
 
       on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
@@ -214,7 +214,7 @@ defmodule WebSockex.ConnTest do
     end
 
     test "works on wss connections" do
-      {:ok, {server_ref, url}} = WebSockex.TestServer.start_https(self())
+      {:ok, {_, server_ref, url}} = WebSockex.TestServer.start_https(self())
       on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
       uri = URI.parse(url)
       conn = WebSockex.Conn.new(uri)

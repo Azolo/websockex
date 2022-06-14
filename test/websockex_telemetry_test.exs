@@ -22,7 +22,7 @@ defmodule WebSockexTelemetryTest do
           %{}
         )
 
-        {:ok, {server_ref, url}} = WebSockex.TestServer.start(self())
+        {:ok, {_, server_ref, url}} = WebSockex.TestServer.start(self())
 
         {:ok, pid} = TestClient.start(url, %{catch_text: self()})
 

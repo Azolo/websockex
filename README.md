@@ -23,6 +23,11 @@ defmodule WebSocketExample do
     IO.puts "Sending #{type} frame with payload: #{msg}"
     {:reply, frame, state}
   end
+
+  def handle_disconnect(_, state) do
+    IO.puts "Connection failure. Backing off for 1 second before reconnecting"
+    {:backoff, 1_000, state}
+  end
 end
 ```
 

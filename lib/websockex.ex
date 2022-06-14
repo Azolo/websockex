@@ -82,14 +82,6 @@ defmodule WebSockex do
   @typedoc """
   Options values for `start_link`.
 
-  - `:async` - Replies with `{:ok, pid}` before establishing the connection.
-    This is useful for when attempting to connect indefinitely, this way the
-    process doesn't block trying to establish a connection.
-  - `:handle_initial_conn_failure` - When set to `true` a connection failure
-    while establishing the initial connection won't immediately return an error
-    and instead will invoke the `c:handle_disconnect/2` callback. This option
-    only matters during process initialization. The `handle_disconnect`
-    callback is always invoked if an established connection is lost.
   - `:debug` - Options to set the debug options for `:sys.handle_debug`.
   - `:name` - An atom that the registers the process with name locally.
     Can also be a `{:via, module, term}` or `{:global, term}` tuple.
@@ -98,10 +90,8 @@ defmodule WebSockex do
   """
   @type option ::
           WebSockex.Conn.connection_option()
-          | {:async, boolean}
           | {:debug, debug_opts}
           | {:name, atom | {:global, term} | {:via, module, term}}
-          | {:handle_initial_conn_failure, boolean}
 
   @typedoc """
   The reason a connection was closed.
@@ -185,24 +175,20 @@ defmodule WebSockex do
   of crashes or other errors the process will terminate immediately
   skipping this callback.
 
-  If the `handle_initial_conn_failure: true` option is provided during process
-  startup, then this callback will be invoked if the process fails to establish
-  an initial connection.
-
   If a connection is established by reconnecting, the `c:handle_connect/2`
   callback will be invoked.
 
   The possible returns for this callback are:
 
   - `{:ok, state}` will continue the process termination.
-  - `{:reconnect, state}` will attempt to reconnect instead of terminating.
-  - `{:reconnect, conn, state}` will attempt to reconnect with the connection
+  - `{:backoff, timeout, state}` will attempt to reconnect after timeout instead of terminating.
+  - `{:backoff, timeout, conn, state}` will attempt to reconnect after timeout with the connection
     data in `conn`. `conn` is expected to be a `t:WebSockex.Conn.t/0`.
   """
   @callback handle_disconnect(connection_status_map, state :: term) ::
               {:ok, new_state}
-              | {:reconnect, new_state}
-              | {:reconnect, new_conn :: WebSockex.Conn.t(), new_state}
+              | {:backoff, timeout(), new_state}
+              | {:backoff, timeout(), new_conn :: WebSockex.Conn.t(), new_state}
             when new_state: term
 
   @doc """
@@ -464,6 +450,10 @@ defmodule WebSockex do
     close_loop(reason, parent, debug, Map.delete(state, :connection_status))
   end
 
+  def system_continue(parent, debug, %{connection_status: :backoff} = state) do
+    backoff_loop(parent, debug, Map.delete(state, :connection_status))
+  end
+
   @doc false
   @spec system_terminate(term, pid, any, any) :: no_return
   def system_terminate(reason, parent, debug, state) do
@@ -543,39 +533,20 @@ defmodule WebSockex do
     # OTP stuffs
     debug = Utils.parse_debug_options(self(), opts)
 
-    reply_fun =
-      case Keyword.get(opts, :async, false) do
-        true ->
-          :proc_lib.init_ack(parent, {:ok, self()})
-          &async_init_fun/1
-
-        false ->
-          &sync_init_fun(parent, &1)
-      end
+    :proc_lib.init_ack(parent, {:ok, self()})
 
     state = %{
       conn: conn,
       module: module,
       module_state: module_state,
       name: name,
-      reply_fun: reply_fun,
       buffer: <<>>,
-      fragment: nil
+      fragment: nil,
+      backoff: nil,
+      attempt_number: 0
     }
 
-    handle_conn_failure = Keyword.get(opts, :handle_initial_conn_failure, false)
-
-    case open_connection(parent, debug, state) do
-      {:ok, new_state} ->
-        debug = Utils.sys_debug(debug, :connected, state)
-        module_init(parent, debug, new_state)
-
-      {:error, error, new_state} when handle_conn_failure == true ->
-        init_conn_failure(error, parent, debug, new_state)
-
-      {:error, error, _} ->
-        state.reply_fun.({:error, error})
-    end
+    connect(parent, debug, state)
   end
 
   # Loops
@@ -588,19 +559,8 @@ defmodule WebSockex do
         state = Map.put(state, :connection_status, :connecting)
         :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
 
-      {:"$websockex_send", from, _frame} ->
-        :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :opening}})
-        open_loop(parent, debug, state)
-
       {:EXIT, ^parent, reason} ->
-        case state do
-          %{reply_fun: reply_fun} ->
-            reply_fun.(reason)
-            exit(reason)
-
-          _ ->
-            terminate(reason, parent, debug, state)
-        end
+        terminate(reason, parent, debug, state)
 
       {^ref, {:ok, new_conn}} ->
         Process.demonitor(ref, [:flush])
@@ -615,6 +575,30 @@ defmodule WebSockex do
         Process.demonitor(ref, [:flush])
         new_state = Map.delete(state, :task)
         {:error, reason, new_state}
+    end
+  end
+
+  defp backoff_loop(parent, debug, state) do
+    %{backoff: backoff} = state
+
+    receive do
+      {:system, from, req} ->
+        state = Map.put(state, :connection_status, :backoff)
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, state)
+
+      {:"$websockex_send", from, _frame} ->
+        :gen.reply(from, {:error, %WebSockex.NotConnectedError{connection_state: :backoff}})
+        backoff_loop(parent, debug, state)
+
+      {:"$websockex_cast", msg} ->
+        debug = Utils.sys_debug(debug, {:in, :cast, msg}, state)
+        common_handle({:handle_cast, msg}, parent, debug, state)
+
+      {:EXIT, ^parent, reason} ->
+        terminate(reason, parent, debug, state)
+
+      {:timeout, ^backoff, :backoff} ->
+        connect(parent, debug, %{state | backoff: nil})
     end
   end
 
@@ -666,6 +650,7 @@ defmodule WebSockex do
   defp close_loop(reason, parent, debug, %{conn: conn, timer_ref: timer_ref} = state) do
     transport = state.conn.transport
     socket = state.conn.socket
+    state = cancel_backoff(state)
 
     receive do
       {:system, from, req} ->
@@ -938,61 +923,49 @@ defmodule WebSockex do
 
   # Connection Handling
 
-  defp init_conn_failure(reason, parent, debug, state, attempt \\ 1) do
-    case handle_disconnect(reason, state, attempt) do
-      {:ok, new_module_state} ->
-        init_failure(reason, parent, debug, %{state | module_state: new_module_state})
-
-      {:reconnect, new_conn, new_module_state} ->
-        state = %{state | conn: new_conn, module_state: new_module_state}
-        debug = Utils.sys_debug(debug, :reconnect, state)
-
-        case open_connection(parent, debug, state) do
-          {:ok, new_state} ->
-            debug = Utils.sys_debug(debug, :connected, state)
-            module_init(parent, debug, new_state)
-
-          {:error, new_reason, new_state} ->
-            init_conn_failure(new_reason, parent, debug, new_state, attempt + 1)
-        end
-
-      {:"$EXIT", reason} ->
-        init_failure(reason, parent, debug, state)
-    end
-  end
-
-  defp on_disconnect(reason, parent, debug, state, attempt \\ 1) do
-    case handle_disconnect(reason, state, attempt) do
+  defp on_disconnect(reason, parent, debug, state) do
+    case handle_disconnect(reason, state) do
       {:ok, new_module_state} when is_tuple(reason) and elem(reason, 0) == :error ->
         terminate(elem(reason, 1), parent, debug, %{state | module_state: new_module_state})
 
       {:ok, new_module_state} ->
         terminate(reason, parent, debug, %{state | module_state: new_module_state})
 
-      {:reconnect, new_conn, new_module_state} ->
-        state = %{state | conn: new_conn, module_state: new_module_state}
-        debug = Utils.sys_debug(debug, :reconnect, state)
-
-        case open_connection(parent, debug, state) do
-          {:ok, new_state} ->
-            debug = Utils.sys_debug(debug, :reconnected, state)
-            reconnect(parent, debug, new_state)
-
-          {:error, new_reason, new_state} ->
-            on_disconnect(new_reason, parent, debug, new_state, attempt + 1)
-        end
+      {:backoff, backoff_timeout, new_conn, new_module_state} ->
+        backoff = start_backoff(backoff_timeout)
+        state = %{state | conn: new_conn, backoff: backoff, module_state: new_module_state}
+        backoff_loop(parent, debug, state)
 
       {:"$EXIT", reason} ->
         terminate(reason, parent, debug, state)
     end
   end
 
-  defp reconnect(parent, debug, state) do
+  defp connect(parent, debug, state) do
+    case open_connection(parent, debug, state) do
+      {:ok, new_state} ->
+        debug = Utils.sys_debug(debug, :connected, state)
+        on_connected(parent, debug, new_state)
+
+      {:error, error, new_state} ->
+        on_disconnect(error, parent, debug, update_in(new_state.attempt_number, &(&1 + 1)))
+    end
+  end
+
+  defp on_connected(parent, debug, state) do
     result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
 
     case result do
       {:ok, new_module_state} ->
-        state = Map.merge(state, %{buffer: <<>>, fragment: nil, module_state: new_module_state})
+        state =
+          Map.merge(state, %{
+            buffer: <<>>,
+            fragment: nil,
+            module_state: new_module_state,
+            attempt_number: 1
+          })
+
+        execute_telemetry([:websockex, :connected], state)
         websocket_loop(parent, debug, state)
 
       {:"$EXIT", reason} ->
@@ -1032,39 +1005,6 @@ defmodule WebSockex do
   end
 
   # Other State Functions
-
-  defp module_init(parent, debug, state) do
-    execute_telemetry([:websockex, :connected], state)
-
-    result = try_callback(state.module, :handle_connect, [state.conn, state.module_state])
-
-    case result do
-      {:ok, new_module_state} ->
-        state.reply_fun.({:ok, self()})
-
-        state =
-          Map.put(state, :module_state, new_module_state)
-          |> Map.delete(:reply_fun)
-
-        websocket_loop(parent, debug, state)
-
-      {:"$EXIT", reason} ->
-        state.reply_fun.(reason)
-
-      badreply ->
-        reason =
-          {:error,
-           %WebSockex.BadResponseError{
-             module: state.module,
-             function: :handle_connect,
-             args: [state.conn, state.module_state],
-             response: badreply
-           }}
-
-        state.reply_fun.(reason)
-    end
-  end
-
   @spec terminate(any, pid, any, any) :: no_return
   defp terminate(reason, parent, debug, state) do
     execute_telemetry([:websockex, :terminate], state, %{reason: reason})
@@ -1092,9 +1032,8 @@ defmodule WebSockex do
     end
   end
 
-  defp handle_disconnect(reason, state, attempt) do
-    status_map = %{conn: state.conn, reason: reason, attempt_number: attempt}
-
+  defp handle_disconnect(reason, state) do
+    status_map = %{conn: state.conn, reason: reason, attempt_number: state.attempt_number}
     execute_telemetry([:websockex, :disconnected], state, status_map)
 
     result = try_callback(state.module, :handle_disconnect, [status_map, state.module_state])
@@ -1103,11 +1042,11 @@ defmodule WebSockex do
       {:ok, new_state} ->
         {:ok, new_state}
 
-      {:reconnect, new_state} ->
-        {:reconnect, state.conn, new_state}
+      {:backoff, timeout, new_conn, new_state} ->
+        {:backoff, timeout, new_conn, new_state}
 
-      {:reconnect, new_conn, new_state} ->
-        {:reconnect, new_conn, new_state}
+      {:backoff, timeout, new_state} ->
+        {:backoff, timeout, state.conn, new_state}
 
       {:"$EXIT", _} = res ->
         res
@@ -1135,21 +1074,6 @@ defmodule WebSockex do
 
     :exit, payload ->
       {:"$EXIT", payload}
-  end
-
-  defp init_failure(reason, _parent, _debug, state) do
-    state.reply_fun.({:error, reason})
-  end
-
-  defp async_init_fun({:ok, _}), do: :noop
-  defp async_init_fun(exit_reason), do: exit(exit_reason)
-
-  defp sync_init_fun(parent, {error, stacktrace}) when is_list(stacktrace) do
-    :proc_lib.init_ack(parent, {:error, error})
-  end
-
-  defp sync_init_fun(parent, reply) do
-    :proc_lib.init_ack(parent, reply)
   end
 
   defp validate_handshake(headers, key) do
@@ -1185,5 +1109,37 @@ defmodule WebSockex do
     end
   else
     defp execute_telemetry(_, _, _ \\ %{}), do: :ok
+  end
+
+  ## backoff helpers
+
+  defp start_backoff(:infinity), do: nil
+
+  defp start_backoff(timeout) do
+    :erlang.start_timer(timeout, self(), :backoff)
+  end
+
+  defp cancel_backoff(%{backoff: nil} = state), do: state
+
+  defp cancel_backoff(%{backoff: backoff} = state) do
+    case :erlang.cancel_timer(backoff) do
+      false ->
+        flush_backoff(backoff)
+
+      _ ->
+        :ok
+    end
+
+    %{state | backoff: nil}
+  end
+
+  defp flush_backoff(backoff) do
+    receive do
+      {:timeout, ^backoff, :backoff} ->
+        :ok
+    after
+      0 ->
+        :ok
+    end
   end
 end

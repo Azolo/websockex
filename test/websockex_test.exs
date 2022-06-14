@@ -18,14 +18,14 @@ defmodule WebSockexTest do
   end
 
   setup do
-    {:ok, {server_ref, url}} = TestServer.start(self())
+    {:ok, {server_pid, server_ref, url}} = TestServer.start(self())
 
     on_exit(fn -> TestServer.shutdown(server_ref) end)
 
     {:ok, pid} = TestClient.start_link(url, %{})
-    server_pid = TestServer.receive_socket_pid()
+    socket_pid = TestServer.receive_socket_pid()
 
-    [pid: pid, url: url, server_pid: server_pid, server_ref: server_ref]
+    [pid: pid, url: url, socket_pid: socket_pid, server_ref: server_ref, server_pid: server_pid]
   end
 
   describe "local named processes" do
@@ -111,14 +111,14 @@ defmodule WebSockexTest do
       conn = WebSockex.Conn.new(URI.parse(context.url))
 
       assert {:ok, _} = WebSockex.start(conn, TestClient, %{catch_text: self()})
-      server_pid = TestServer.receive_socket_pid()
+      socket_pid = TestServer.receive_socket_pid()
 
-      send(server_pid, {:send, {:text, "Start Link Conn"}})
+      send(socket_pid, {:send, {:text, "Start Link Conn"}})
       assert_receive {:caught_text, "Start Link Conn"}
     end
 
-    test "with async option failure", context do
-      assert {:ok, pid} = TestClient.start(context.url, %{async_test: true}, async: true)
+    test "with failure", context do
+      assert {:ok, pid} = TestClient.start(context.url, %{async_test: true})
 
       Process.monitor(pid)
 
@@ -126,13 +126,6 @@ defmodule WebSockexTest do
 
       assert_receive :async_test, 500
       assert_receive {:DOWN, _, :process, ^pid, "Async Test"}
-    end
-
-    test "without async option", context do
-      Process.flag(:trap_exit, true)
-
-      assert TestClient.start(context.url, %{async_test: true}) ==
-               {:error, %RuntimeError{message: "Async Timeout"}}
     end
 
     test "returns an error with a bad url" do
@@ -146,31 +139,24 @@ defmodule WebSockexTest do
       conn = WebSockex.Conn.new(URI.parse(context.url))
 
       assert {:ok, _} = WebSockex.start_link(conn, TestClient, %{catch_text: self()})
-      server_pid = TestServer.receive_socket_pid()
+      socket_pid = TestServer.receive_socket_pid()
 
-      send(server_pid, {:send, {:text, "Start Link Conn"}})
+      send(socket_pid, {:send, {:text, "Start Link Conn"}})
       assert_receive {:caught_text, "Start Link Conn"}
     end
 
-    test "with async option", context do
-      assert {:ok, _} = TestClient.start_link(context.url, %{catch_text: self()}, async: true)
+    test "with url", context do
+      assert {:ok, _} = TestClient.start_link(context.url, %{catch_text: self()})
 
-      server_pid = TestServer.receive_socket_pid()
+      socket_pid = TestServer.receive_socket_pid()
 
-      send(server_pid, {:send, {:text, "Hello"}})
+      send(socket_pid, {:send, {:text, "Hello"}})
       assert_receive {:caught_text, "Hello"}
     end
 
-    test "without async option", context do
+    test "with failure", context do
       Process.flag(:trap_exit, true)
-
-      assert TestClient.start_link(context.url, %{async_test: true}) ==
-               {:error, %RuntimeError{message: "Async Timeout"}}
-    end
-
-    test "with async option failure", context do
-      Process.flag(:trap_exit, true)
-      assert {:ok, pid} = TestClient.start_link(context.url, %{async_test: true}, async: true)
+      assert {:ok, pid} = TestClient.start_link(context.url, %{async_test: true})
 
       send(pid, {:continue_async, self()})
 
@@ -185,7 +171,7 @@ defmodule WebSockexTest do
   end
 
   test "can handle initial connect headers" do
-    {:ok, {server_ref, url}} = TestServer.start_https(self())
+    {:ok, {_server_pid, server_ref, url}} = TestServer.start_https(self())
 
     on_exit(fn -> TestServer.shutdown(server_ref) end)
 
@@ -201,17 +187,17 @@ defmodule WebSockexTest do
   end
 
   test "can connect to secure server" do
-    {:ok, {server_ref, url}} = TestServer.start_https(self())
+    {:ok, {_server_pid, server_ref, url}} = TestServer.start_https(self())
 
     on_exit(fn -> TestServer.shutdown(server_ref) end)
 
     {:ok, pid} = TestClient.start_link(url, %{}, cacerts: TestServer.cacerts())
-    server_pid = TestServer.receive_socket_pid()
+    socket_pid = TestServer.receive_socket_pid()
 
     TestClient.catch_attr(pid, :pong, self())
 
     # Test server -> client ping
-    send(server_pid, :send_ping)
+    send(socket_pid, :send_ping)
     assert_receive :received_pong
 
     # Test client -> server ping
@@ -228,7 +214,7 @@ defmodule WebSockexTest do
   end
 
   test "handles a ssl message send right after connecting" do
-    {:ok, {server_ref, url}} = TestServer.start_https(self())
+    {:ok, {server_pid, server_ref, url}} = TestServer.start_https(self())
 
     on_exit(fn -> TestServer.shutdown(server_ref) end)
 
@@ -245,8 +231,7 @@ defmodule WebSockexTest do
         ]
       )
 
-    TestServer.receive_socket_pid()
-    |> TestServer.new_conn_mode(:immediate_reply)
+    TestServer.new_conn_mode(server_pid, :immediate_reply)
 
     assert {:ok, _pid} = TestClient.start_link(url, %{catch_text: self()})
 
@@ -283,8 +268,8 @@ defmodule WebSockexTest do
     assert_receive conn = %WebSockex.Conn{}
     :inet.setopts(conn.socket, active: false)
 
-    send(context.server_pid, {:send, {:text, "Hello"}})
-    send(context.server_pid, {:send, {:text, "Bye"}})
+    send(context.socket_pid, {:send, {:text, "Hello"}})
+    send(context.socket_pid, {:send, {:text, "Bye"}})
 
     :inet.setopts(conn.socket, active: true)
 
@@ -390,16 +375,24 @@ defmodule WebSockexTest do
       assert_receive {:EXIT, ^pid, %WebSockex.ConnError{}}
     end
 
-    test "returns an error while opening", context do
+    test "waits for connection to be connected", context do
       TestServer.new_conn_mode(context.server_pid, :connection_wait)
       TestClient.set_attr(context.pid, :reconnect, true)
 
       WebSockex.cast(context.pid, :close)
 
-      TestServer.receive_socket_pid()
+      socket_pid = TestServer.receive_socket_pid()
 
-      assert WebSockex.send_frame(context.pid, {:text, "Test"}) ==
-               {:error, %WebSockex.NotConnectedError{connection_state: :opening}}
+      task =
+        Task.async(fn ->
+          WebSockex.send_frame(context.pid, {:text, "Test"})
+        end)
+
+      Process.sleep(10)
+
+      send(socket_pid, :connection_continue)
+
+      assert :ok = Task.await(task)
     end
 
     test "returns a descriptive error message for trying to send a frame from self", context do
@@ -413,7 +406,7 @@ defmodule WebSockexTest do
 
     test "returns an error while closing", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, :stall)
+      send(context.socket_pid, :stall)
 
       WebSockex.cast(pid, :close)
 
@@ -489,7 +482,7 @@ defmodule WebSockexTest do
       TestClient.catch_attr(context.pid, :connect, self())
       WebSockex.cast(context.pid, {:set_attr, :reconnect, true})
 
-      send(context.server_pid, :close)
+      send(context.socket_pid, :close)
 
       assert_receive :caught_connect
     end
@@ -499,7 +492,7 @@ defmodule WebSockexTest do
     test "can handle a binary frame", context do
       TestClient.catch_attr(context.pid, :binary, self())
       binary = :erlang.term_to_binary(:hello)
-      send(context.server_pid, {:send, {:binary, binary}})
+      send(context.socket_pid, {:send, {:binary, binary}})
 
       assert_receive {:caught_binary, ^binary}
     end
@@ -507,7 +500,7 @@ defmodule WebSockexTest do
     test "can handle a text frame", context do
       TestClient.catch_attr(context.pid, :text, self())
       text = "Murky is green"
-      send(context.server_pid, {:send, {:text, text}})
+      send(context.socket_pid, {:send, {:text, text}})
 
       assert_receive {:caught_text, ^text}
     end
@@ -637,7 +630,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_frame bad reply", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:text, "Bad Reply"}})
+      send(context.socket_pid, {:send, {:text, "Bad Reply"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
@@ -646,7 +639,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_frame error", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:text, "Error"}})
+      send(context.socket_pid, {:send, {:text, "Error"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Frame Error"}, _}}
@@ -655,7 +648,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_frame exit", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:text, "Exit"}})
+      send(context.socket_pid, {:send, {:text, "Exit"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Frame Exit"}
@@ -664,7 +657,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_ping bad reply", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:ping, "Bad Reply"}})
+      send(context.socket_pid, {:send, {:ping, "Bad Reply"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}, 500
@@ -673,7 +666,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_ping error", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:ping, "Error"}})
+      send(context.socket_pid, {:send, {:ping, "Error"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Ping Error"}, _}}
@@ -682,7 +675,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_ping exit", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:ping, "Exit"}})
+      send(context.socket_pid, {:send, {:ping, "Exit"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Ping Exit"}
@@ -691,7 +684,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_pong bad reply", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:pong, "Bad Reply"}})
+      send(context.socket_pid, {:send, {:pong, "Bad Reply"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
@@ -700,7 +693,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_pong error", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:pong, "Error"}})
+      send(context.socket_pid, {:send, {:pong, "Error"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, {%RuntimeError{message: "Pong Error"}, _}}
@@ -709,7 +702,7 @@ defmodule WebSockexTest do
 
     test "executes in handle_pong exit", %{pid: pid} = context do
       Process.flag(:trap_exit, true)
-      send(context.server_pid, {:send, {:pong, "Exit"}})
+      send(context.socket_pid, {:send, {:pong, "Exit"}})
 
       assert_receive {1011, ""}
       assert_receive {:EXIT, ^pid, "Pong Exit"}
@@ -746,17 +739,6 @@ defmodule WebSockexTest do
       assert_received :terminate
     end
 
-    test "is not executed in handle_disconnect before initialized", context do
-      assert {:error, %WebSockex.BadResponseError{}} =
-               TestClient.start_link(
-                 context.url <> "bad",
-                 %{disconnect_badreply: true},
-                 handle_initial_conn_failure: true
-               )
-
-      refute_received :terminate
-    end
-
     test "executes in handle_connect bad reply", %{pid: pid} do
       Process.flag(:trap_exit, true)
       WebSockex.cast(pid, {:set_attr, :connect_badreply, true})
@@ -788,17 +770,6 @@ defmodule WebSockexTest do
 
       assert_receive {:EXIT, ^pid, %WebSockex.BadResponseError{}}
       assert_received :terminate
-    end
-
-    test "is not executed in handle_connect before initialized", context do
-      assert {:error, %WebSockex.BadResponseError{}} =
-               TestClient.start_link(
-                 context.url,
-                 %{connect_badreply: true},
-                 handle_initial_conn_failure: true
-               )
-
-      refute_received :terminate
     end
 
     test "executes in a frame close", context do
@@ -836,13 +807,13 @@ defmodule WebSockexTest do
 
   describe "handle_ping callback" do
     test "can handle a ping frame", context do
-      send(context.server_pid, :send_ping)
+      send(context.socket_pid, :send_ping)
 
       assert_receive :received_pong
     end
 
     test "can handle a ping frame with a payload", context do
-      send(context.server_pid, :send_payload_ping)
+      send(context.socket_pid, :send_payload_ping)
 
       assert_receive :received_payload_pong
     end
@@ -915,7 +886,7 @@ defmodule WebSockexTest do
       assert_receive :caught_disconnect
 
       # Test HTTPS
-      {:ok, {server_ref, url}} = TestServer.start_https(self())
+      {:ok, {_server_pid, server_ref, url}} = TestServer.start_https(self())
       on_exit(fn -> TestServer.shutdown(server_ref) end)
 
       {:ok, pid} = TestClient.start_link(url, %{})
@@ -948,13 +919,13 @@ defmodule WebSockexTest do
     end
 
     test "is invoked when receiving a close frame", context do
-      send(context.server_pid, :close)
+      send(context.socket_pid, :close)
 
       assert_receive :caught_disconnect, 1250
     end
 
     test "is invoked when receiving a close frame with a payload", context do
-      send(context.server_pid, {:close, 4025, "Testing"})
+      send(context.socket_pid, {:close, 4025, "Testing"})
 
       assert_receive {:caught_disconnect, 4025, "Testing"}, 1250
     end
@@ -978,34 +949,52 @@ defmodule WebSockexTest do
 
       assert_receive {4985, "Testing Reconnect"}
 
-      server_pid = TestServer.receive_socket_pid()
-      send(server_pid, {:send, {:text, "Hello"}})
+      socket_pid = TestServer.receive_socket_pid()
+      send(socket_pid, {:send, {:text, "Hello"}})
 
       assert_receive {:caught_text, "Hello"}, 500
     end
 
-    test "can attempt to reconnect multiple times", %{pid: client_pid} = context do
-      WebSockex.cast(client_pid, {:set_attr, :multiple_reconnect, self()})
-
+    test "can attempt to reconnect multiple times", context do
+      Process.flag(:trap_exit, true)
       TestServer.new_conn_mode(context.server_pid, {:code, 403})
-      send(context.server_pid, :shutdown)
 
-      assert_receive {:retry_connect, %{conn: %WebSockex.Conn{}, attempt_number: 1}}
-      assert_receive {:check_retry_state, %{attempt: 1}}
+      {:ok, client_pid} =
+        TestClient.start_link(context.url, %{multiple_reconnect: self(), catch_connect: self()})
 
-      assert_receive {:retry_connect,
+      assert_receive {:disconnect_status,
+                      %{conn: %WebSockex.Conn{}, reason: %{code: 403}, attempt_number: 1}}
+
+      send(client_pid, :reconnect)
+
+      assert_receive {:disconnect_status,
                       %{conn: %WebSockex.Conn{}, reason: %{code: 403}, attempt_number: 2}}
 
-      assert_receive {:check_retry_state, %{attempt: 2, state: %{attempt: 1}}}
+      send(client_pid, :reconnect)
 
-      assert_receive {:stopping_retry,
+      assert_receive {:disconnect_status,
                       %{conn: %WebSockex.Conn{}, reason: %{code: 403}, attempt_number: 3}}
 
-      assert_receive {:DOWN, _ref, :process, ^client_pid, %WebSockex.RequestError{code: 403}}
+      TestServer.new_conn_mode(context.server_pid, :ok)
+      send(client_pid, :reconnect)
+
+      assert_receive :caught_connect
+
+      socket_pid = TestServer.receive_socket_pid()
+      TestServer.new_conn_mode(context.server_pid, {:code, 403})
+      send(socket_pid, :shutdown)
+
+      # Succcessful reconnect resets attempt_number
+      assert_receive {:disconnect_status,
+                      %{conn: %WebSockex.Conn{}, reason: {:remote, :closed}, attempt_number: 1}}
+
+      send(client_pid, :stop)
+
+      assert_receive {:EXIT, ^client_pid, {:remote, :closed}}
     end
 
     test "can provide new conn struct during reconnect", context do
-      {:ok, {server_ref, new_url}} = TestServer.start(self())
+      {:ok, {_server_pid, server_ref, new_url}} = TestServer.start(self())
       on_exit(fn -> TestServer.shutdown(server_ref) end)
 
       WebSockex.cast(context.pid, {:set_attr, :change_conn_reconnect, self()})
@@ -1013,26 +1002,26 @@ defmodule WebSockexTest do
       TestClient.catch_attr(context.pid, :text, self())
 
       TestServer.new_conn_mode(context.server_pid, {:code, 403})
-      send(context.server_pid, :shutdown)
+      send(context.socket_pid, :shutdown)
 
-      server_pid = TestServer.receive_socket_pid()
+      socket_pid = TestServer.receive_socket_pid()
 
       assert_received :retry_change_conn
 
-      send(server_pid, {:send, {:text, "Hello"}})
+      send(socket_pid, {:send, {:text, "Hello"}})
 
       assert_receive {:caught_text, "Hello"}
     end
 
     test "can handle remote closures during client close initiation", context do
       WebSockex.cast(context.pid, :delayed_close)
-      Process.exit(context.server_pid, :kill)
+      Process.exit(context.socket_pid, :kill)
 
       assert_receive {:caught_disconnect, {:remote, :closed}}
     end
 
     test "can handle socket terminations", context do
-      Process.exit(context.server_pid, :kill)
+      Process.exit(context.socket_pid, :kill)
 
       assert_receive {:caught_disconnect, {:remote, :closed}}
     end
@@ -1055,85 +1044,26 @@ defmodule WebSockexTest do
 
       WebSockex.cast(context.pid, {:set_attr, :reconnect, true})
 
-      Process.exit(context.server_pid, :kill)
+      Process.exit(context.socket_pid, :kill)
 
       send(context.pid, {conn.transport, conn.socket, part})
 
       assert_receive {:caught_disconnect, :reconnecting}
 
-      server_pid = TestServer.receive_socket_pid()
-      send(server_pid, {:send, {:text, "Hello"}})
+      socket_pid = TestServer.receive_socket_pid()
+      send(socket_pid, {:send, {:text, "Hello"}})
 
       assert_receive {:caught_text, "Hello"}
     end
 
     test "local close timeout", context do
-      send(context.server_pid, :stall)
+      send(context.socket_pid, :stall)
 
       WebSockex.cast(context.pid, :close)
 
       send(context.pid, :"$websockex_close_timeout")
 
       assert_receive :caught_disconnect
-    end
-
-    test "gets invoked during initial connect with handle_initial_conn_failure", context do
-      assert {:error, _} =
-               TestClient.start_link(
-                 context.url <> "bad",
-                 %{catch_init_connect_failure: self()},
-                 handle_initial_conn_failure: true
-               )
-
-      assert_receive :caught_initial_conn_failure
-    end
-
-    test "doesn't get invoked during initial connect without retry", context do
-      assert {:error, _} =
-               TestClient.start_link(context.url <> "bad", %{catch_init_connect_failure: self()})
-
-      refute_receive :caught_initial_conn_failure
-    end
-
-    test "can attempt to reconnect during an initial connect", context do
-      assert {:error, _} =
-               TestClient.start_link(
-                 context.url <> "bad",
-                 %{multiple_reconnect: self()},
-                 handle_initial_conn_failure: true
-               )
-
-      assert_received {:retry_connect,
-                       %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 1}}
-
-      assert_received {:check_retry_state, %{attempt: 1}}
-
-      assert_received {:retry_connect,
-                       %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 2}}
-
-      assert_received {:check_retry_state, %{attempt: 2, state: %{attempt: 1}}}
-
-      assert_received {:stopping_retry,
-                       %{conn: %WebSockex.Conn{}, reason: %{code: 404}, attempt_number: 3}}
-    end
-
-    test "can reconnect with a new conn struct during an initial connection retry", context do
-      state_map = %{change_conn_reconnect: self(), good_url: context.url, catch_text: self()}
-
-      assert {:ok, _} =
-               TestClient.start_link(
-                 context.url <> "bad",
-                 state_map,
-                 handle_initial_conn_failure: true
-               )
-
-      server_pid = TestServer.receive_socket_pid()
-
-      assert_received :retry_change_conn
-
-      send(server_pid, {:send, {:text, "Hello"}})
-
-      assert_receive {:caught_text, "Hello"}
     end
   end
 
@@ -1156,10 +1086,10 @@ defmodule WebSockexTest do
     end
 
     test "is invoked when implemented", context do
-      WebSockex.cast(context.pid, {:set_attr, :custom_status, true})
+      {:ok, pid} = TestClient.start_link(context.url, %{custom_status: true})
 
       {{:data, data}, _} =
-        elem(:sys.get_status(context.pid), 3)
+        elem(:sys.get_status(pid), 3)
         |> List.last()
         |> List.keydelete(:data, 0)
         |> List.keytake(:data, 0)
@@ -1183,7 +1113,8 @@ defmodule WebSockexTest do
     end
 
     test "wraps a non-list return", context do
-      WebSockex.cast(context.pid, {:set_attr, :non_list_status, true})
+      WebSockex.cast(context.pid, {:set_attr, :non_list_status, true, self()})
+      assert_receive {:set_attr, :non_list_status}
 
       {{:data, data}, _} =
         elem(:sys.get_status(context.pid), 3)
@@ -1195,23 +1126,18 @@ defmodule WebSockexTest do
     end
   end
 
-  test "Won't exit on a request error", context do
-    assert TestClient.start_link(context.url <> "blah", %{}) ==
-             {:error, %WebSockex.RequestError{code: 404, message: "Not Found"}}
-  end
-
   describe "default implementation errors" do
     setup context do
       {:ok, pid} = WebSockex.start_link(context.url, BareClient, %{})
-      server_pid = TestServer.receive_socket_pid()
+      socket_pid = TestServer.receive_socket_pid()
 
-      [pid: pid, server_pid: server_pid]
+      [pid: pid, socket_pid: socket_pid]
     end
 
     test "handle_frame", context do
       Process.flag(:trap_exit, true)
       frame = {:text, "Hello"}
-      send(context.server_pid, {:send, frame})
+      send(context.socket_pid, {:send, frame})
 
       message =
         "No handle_frame/2 clause in #{__MODULE__}.BareClient provided for #{inspect(frame)}"
@@ -1242,7 +1168,9 @@ defmodule WebSockexTest do
   describe "OTP Compliance" do
     test "requires the child to exit when receiving a parent exit signal", context do
       Process.flag(:trap_exit, true)
-      {:ok, pid} = WebSockex.start_link(context.url, BareClient, [])
+      {:ok, pid} = TestClient.start_link(context.url, %{catch_connect: self()})
+
+      assert_receive :caught_connect
 
       send(pid, {:EXIT, self(), "OTP Compliance Test"})
 
@@ -1256,7 +1184,7 @@ defmodule WebSockexTest do
       WebSockex.cast(pid, {:set_attr, :reconnect, true})
       TestClient.catch_attr(pid, :terminate, self())
       TestServer.new_conn_mode(context.server_pid, :connection_wait)
-      send(context.server_pid, :close)
+      send(context.socket_pid, :close)
 
       _new_server_pid = TestServer.receive_socket_pid()
 
@@ -1272,28 +1200,10 @@ defmodule WebSockexTest do
       assert_received :terminate
     end
 
-    test "a parent exit signal doesn't call terminate on initial connect", context do
-      Process.flag(:trap_exit, true)
-      TestServer.new_conn_mode(context.server_pid, :connection_wait)
-
-      {:ok, pid} = TestClient.start_link(context.url, %{catch_terminate: self()}, async: true)
-
-      {:data, data} =
-        elem(:sys.get_status(pid), 3)
-        |> List.flatten()
-        |> List.keyfind(:data, 0)
-
-      assert {"Connection Status", :connecting} in data
-
-      send(pid, {:EXIT, self(), "OTP Compliance Test"})
-      assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
-      refute_received :terminate
-    end
-
     test "can send system messages while connecting", context do
       TestServer.new_conn_mode(context.server_pid, :connection_wait)
 
-      {:ok, pid} = WebSockex.start_link(context.url, BareClient, [], async: true)
+      {:ok, pid} = WebSockex.start_link(context.url, BareClient, [])
 
       {:data, data} =
         elem(:sys.get_status(pid), 3)
@@ -1318,27 +1228,90 @@ defmodule WebSockexTest do
       assert {"Connection Status", :connected} in data
     end
 
-    test "can send system messages while closing", context do
-      send(context.server_pid, :stall)
-      TestClient.catch_attr(context.pid, :terminate, self())
-      WebSockex.cast(context.pid, :close)
+    test "exits with a parent exit signal while backoff", context do
+      Process.flag(:trap_exit, true)
+      TestServer.new_conn_mode(context.server_pid, {:code, 403})
+
+      {:ok, pid} =
+        TestClient.start_link(context.url, %{
+          backoff: :infinity,
+          catch_disconnect: self(),
+          catch_terminate: self()
+        })
+
+      assert_receive :caught_disconnect
 
       {:data, data} =
-        elem(:sys.get_status(context.pid), 3)
+        elem(:sys.get_status(pid), 3)
+        |> List.flatten()
+        |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", :backoff} in data
+
+      send(pid, {:EXIT, self(), "OTP Compliance Test"})
+      assert_receive {:EXIT, ^pid, "OTP Compliance Test"}
+      assert_received :terminate
+    end
+
+    test "can send system messages while backoff", context do
+      Process.flag(:trap_exit, true)
+      TestServer.new_conn_mode(context.server_pid, {:code, 403})
+
+      {:ok, pid} =
+        TestClient.start_link(context.url, %{
+          backoff: :infinity,
+          catch_disconnect: self(),
+          catch_terminate: self()
+        })
+
+      assert_receive :caught_disconnect
+
+      {:data, data} =
+        elem(:sys.get_status(pid), 3)
+        |> List.flatten()
+        |> List.keyfind(:data, 0)
+
+      assert {"Connection Status", :backoff} in data
+
+      TestClient.cast(pid, {:pid_reply, self()})
+
+      assert_receive :cast
+    end
+
+    test "can send system messages while closing", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{catch_connect: self()})
+
+      assert_receive :caught_connect
+      socket_pid = TestServer.receive_socket_pid()
+
+      send(socket_pid, :stall)
+      TestClient.catch_attr(pid, :terminate, self())
+
+      WebSockex.cast(pid, :close)
+
+      {:data, data} =
+        elem(:sys.get_status(pid), 3)
         |> List.flatten()
         |> List.keyfind(:data, 0)
 
       assert {"Connection Status", {:closing, {:local, :normal}}} in data
 
-      send(context.pid, :"$websockex_close_timeout")
+      send(pid, :"$websockex_close_timeout")
     end
 
-    test "exits with a parent exit signal while closing", %{pid: pid} = context do
+    test "exits with a parent exit signal while closing", context do
+      {:ok, pid} = TestClient.start_link(context.url, %{catch_connect: self()})
       Process.flag(:trap_exit, true)
       TestClient.catch_attr(pid, :terminate, self())
-      WebSockex.cast(context.pid, :close)
 
-      send(context.server_pid, :stall)
+      assert_receive :caught_connect
+      socket_pid = TestServer.receive_socket_pid()
+
+      WebSockex.cast(pid, :close)
+
+      send(socket_pid, :stall)
+
+      Process.sleep(100)
 
       {:data, data} =
         elem(:sys.get_status(pid), 3)
@@ -1354,22 +1327,33 @@ defmodule WebSockexTest do
   end
 
   test ":sys.replace_state only replaces module_state", context do
-    :sys.replace_state(context.pid, fn _ -> :lemon end)
-    WebSockex.cast(context.pid, {:get_state, self()})
+    {:ok, pid} = TestClient.start_link(context.url, %{catch_connect: self()})
+
+    assert_receive :caught_connect
+
+    :sys.replace_state(pid, fn _ -> :lemon end)
+    WebSockex.cast(pid, {:get_state, self()})
 
     assert_receive :lemon
   end
 
   test ":sys.get_state only returns module_state", context do
-    get_state = :sys.get_state(context.pid)
+    {:ok, pid} = TestClient.start_link(context.url, %{catch_connect: self()})
 
-    WebSockex.cast(context.pid, {:get_state, self()})
+    assert_receive :caught_connect
+
+    get_state = :sys.get_state(pid)
+    WebSockex.cast(pid, {:get_state, self()})
 
     assert_receive ^get_state
   end
 
   # Other `format_status` stuff in tested in callback section
   test ":sys.get_status returns from format_status", context do
+    {:ok, _pid} = TestClient.start_link(context.url, %{catch_connect: self()})
+
+    assert_receive :caught_connect
+
     {{:data, data}, rest} =
       elem(:sys.get_status(context.pid), 3)
       |> List.last()
