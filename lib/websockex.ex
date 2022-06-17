@@ -315,7 +315,7 @@ defmodule WebSockex do
 
       @doc false
       def handle_send_result({:error, reason}, frame, key, state) do
-        Logger.warning("[WebSockex] A message failed to send because: #{inspect(reason)}")
+        Logger.warn("[WebSockex] A message failed to send because: #{inspect(reason)}")
         {:close, state}
       end
 

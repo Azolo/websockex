@@ -34,7 +34,7 @@ defmodule BackoffClient do
   end
 
   def handle_disconnect(%{attempt_number: attempt, reason: reason}, state) do
-    Logger.warning("Websocket connection failed because: #{inspect(reason)}. Attempt: #{attempt}")
+    Logger.warn("Websocket connection failed because: #{inspect(reason)}. Attempt: #{attempt}")
     {:backoff, 1_000, state}
   end
 
