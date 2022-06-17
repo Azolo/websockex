@@ -1,3 +1,14 @@
+## Next
+### Enhancements
+- Added `backoff` feature for reconnecting
+- `send_frame/2` is no longer processed during `opening`, ie. it is queued until `connected` or failure to connect.
+
+### Breaking Changes
+- Connection is always established asynchronously to process init 
+  - `async` option is removed since it's now redundant
+  - `handle_initial_conn_failure` option is removed since it's no longer applicable
+- `handle_disconnect/2` no longer accepts `:reconnect` as a result. This is replaced with `:backoff` with a required timeout.
+
 ## 0.4.3
 ### Enhancements
 - Added `ssl_options` documentation

@@ -25,7 +25,7 @@ defmodule WebSockex.TestServer do
 
     case Plug.Adapters.Cowboy.http(__MODULE__, [], opts) do
       {:ok, _} ->
-        {:ok, {ref, url}}
+        {:ok, {agent_pid, ref, url}}
 
       {:error, :eaddrinuse} ->
         start(pid)
@@ -48,7 +48,7 @@ defmodule WebSockex.TestServer do
 
     case Plug.Adapters.Cowboy.https(__MODULE__, [], opts) do
       {:ok, _} ->
-        {:ok, {ref, url}}
+        {:ok, {agent_pid, ref, url}}
 
       {:error, :eaddrinuse} ->
         require Logger
@@ -57,14 +57,8 @@ defmodule WebSockex.TestServer do
     end
   end
 
-  def new_conn_mode(socket_pid, mode) do
-    ref = make_ref()
-    send(socket_pid, {:mode, mode, ref, self()})
-
-    receive do
-      {^ref, :ok} ->
-        :ok
-    end
+  def new_conn_mode(server_pid, mode) do
+    Agent.update(server_pid, fn _ -> mode end)
   end
 
   def shutdown(ref) do
@@ -160,6 +154,12 @@ defmodule WebSockex.TestSocket do
   @impl true
   def websocket_handle({:binary, msg}, state) do
     send(state.pid, :erlang.binary_to_term(msg))
+    {:ok, state}
+  end
+
+  @impl true
+  def websocket_handle({:text, _msg} = frame, state) do
+    send(state.pid, {:server_received_frame, frame})
     {:ok, state}
   end
 
