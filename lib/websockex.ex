@@ -424,7 +424,7 @@ defmodule WebSockex do
 
   def send_frame(client, frame, timeout \\ 10000) do
     try do
-      {:ok, res} = :gen.call(client, :"$websockex_send", frame)
+      {:ok, res} = :gen.call(client, :"$websockex_send", frame, timeout)
       res
     catch
       _, reason ->
