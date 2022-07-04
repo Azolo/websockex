@@ -125,7 +125,7 @@ defmodule WebSockex.Conn do
       %URI{host: host, port: port, scheme: protocol}
       when is_nil(host)
       when is_nil(port)
-      when not (protocol in ["ws", "wss", "http", "https"]) ->
+      when protocol not in ["ws", "wss", "http", "https"] ->
         {:error, %WebSockex.URLError{url: url}}
 
       %URI{path: nil} = uri ->
@@ -134,6 +134,24 @@ defmodule WebSockex.Conn do
       %URI{} = uri ->
         {:ok, uri}
     end
+  end
+
+  @doc """
+  Parses a URI host
+  Host can be "x.y.z.t" or "some.name.domain". If "x.y.z.t", the function
+  will return a valid :inet.ip_address() which __MODULE__.open_socket
+  accepts. This will prevent extra DNS operations which can time out
+  in some contexts
+  """
+  @spec parse_host(String.t()) :: charlist() | :inet.ip_address()
+  def parse_host(host) do
+    host
+    |> to_charlist()
+    |> :inet.parse_address()
+    |> then(fn
+      {:error, :einval} -> to_charlist(host)
+      {:ok, addr} -> addr
+    end)
   end
 
   @doc """
@@ -155,7 +173,7 @@ defmodule WebSockex.Conn do
 
   def open_socket(%{conn_mod: :gen_tcp} = conn) do
     case :gen_tcp.connect(
-           String.to_charlist(conn.host),
+           parse_host(conn.host),
            conn.port,
            socket_connection_options(conn),
            conn.socket_connect_timeout
@@ -170,7 +188,7 @@ defmodule WebSockex.Conn do
 
   def open_socket(%{conn_mod: :ssl} = conn) do
     case :ssl.connect(
-           String.to_charlist(conn.host),
+           parse_host(conn.host),
            conn.port,
            ssl_connection_options(conn),
            conn.socket_connect_timeout
