@@ -24,9 +24,7 @@ defmodule WebSockex.RequestError do
   defexception [:code, :message]
 
   def message(%__MODULE__{code: code, message: message}) do
-    "Didn't get a proper response from the server. The response was: #{inspect(code)} #{
-      inspect(message)
-    }"
+    "Didn't get a proper response from the server. The response was: #{inspect(code)} #{inspect(message)}"
   end
 end
 
@@ -56,9 +54,7 @@ defmodule WebSockex.BadResponseError do
   defexception [:response, :module, :function, :args]
 
   def message(%__MODULE__{} = error) do
-    "Bad Response: Got #{inspect(error.response)} from #{
-      inspect(Exception.format_mfa(error.module, error.function, error.args))
-    }"
+    "Bad Response: Got #{inspect(error.response)} from #{inspect(Exception.format_mfa(error.module, error.function, error.args))}"
   end
 end
 
@@ -70,9 +66,7 @@ defmodule WebSockex.FrameError do
   end
 
   def message(%__MODULE__{reason: :control_frame_too_large} = exception) do
-    "Control Frame Too Large: Control Frames Can't Be Larger Than 125 Bytes\nbuffer: #{
-      exception.buffer
-    }"
+    "Control Frame Too Large: Control Frames Can't Be Larger Than 125 Bytes\nbuffer: #{exception.buffer}"
   end
 
   def message(%__MODULE__{reason: :invalid_utf8} = exception) do
@@ -80,9 +74,7 @@ defmodule WebSockex.FrameError do
   end
 
   def message(%__MODULE__{reason: :invalid_close_code} = exception) do
-    "Invalid Close Code: Close Codes must be in range of 1000 through 4999\nbuffer: #{
-      exception.buffer
-    }"
+    "Invalid Close Code: Close Codes must be in range of 1000 through 4999\nbuffer: #{exception.buffer}"
   end
 
   def message(%__MODULE__{} = exception) do
@@ -103,9 +95,7 @@ defmodule WebSockex.FrameEncodeError do
   def message(%__MODULE__{reason: :close_code_out_of_range} = error) do
     """
     Close Code Out of Range: Close code must be between 1000-4999.
-    Frame: {#{inspect(error.frame_type)}, #{inspect(error.close_code)}, #{
-      inspect(error.frame_payload)
-    }}
+    Frame: {#{inspect(error.frame_type)}, #{inspect(error.close_code)}, #{inspect(error.frame_payload)}}
     """
   end
 end

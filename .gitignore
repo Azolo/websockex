@@ -18,3 +18,7 @@ erl_crash.dump
 
 # I'm trying out VSCode with ElixirLS
 /.elixir_ls
+
+# Ignore dialyzer files
+/priv/plts/*.plt
+/priv/plts/*.plt.hash

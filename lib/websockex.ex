@@ -375,7 +375,7 @@ defmodule WebSockex do
           {:ok, pid} | {:error, term}
   def start_link(conn_info, module, state, opts \\ [])
 
-  def start_link(conn = %WebSockex.Conn{}, module, state, opts) do
+  def start_link(%WebSockex.Conn{} = conn, module, state, opts) do
     Utils.spawn(:link, conn, module, state, opts)
   end
 
@@ -1129,7 +1129,7 @@ defmodule WebSockex do
     apply(module, function, args)
   catch
     :error, payload ->
-      stacktrace = System.stacktrace()
+      stacktrace = __STACKTRACE__
       reason = Exception.normalize(:error, payload, stacktrace)
       {:"$EXIT", {reason, stacktrace}}
 
