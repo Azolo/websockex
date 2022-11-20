@@ -3,7 +3,7 @@ defmodule EchoClient do
   require Logger
 
   def start_link(opts \\ []) do
-    WebSockex.start_link("wss://echo.websocket.org/?encoding=text", __MODULE__, :fake_state, opts)
+    WebSockex.start_link("wss://echo.websocket.events/?encoding=text", __MODULE__, :fake_state, opts)
   end
 
   @spec echo(pid, String.t) :: :ok
