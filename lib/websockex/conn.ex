@@ -99,7 +99,7 @@ defmodule WebSockex.Conn do
         Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
       socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
       ssl_options: Keyword.get(opts, :ssl_options, nil),
-      socket_options: Keyword.get(opts, :socket_options, nil),
+      socket_options: Keyword.get(opts, :socket_options, nil)
     }
   end
 
@@ -145,13 +145,15 @@ defmodule WebSockex.Conn do
   """
   @spec parse_host(String.t()) :: charlist() | :inet.ip_address()
   def parse_host(host) do
-    host
-    |> to_charlist()
-    |> :inet.parse_address()
-    |> then(fn
+    parsed =
+      host
+      |> to_charlist()
+      |> :inet.parse_address()
+
+    case parsed do
       {:error, :einval} -> to_charlist(host)
       {:ok, addr} -> addr
-    end)
+    end
   end
 
   @doc """
@@ -347,8 +349,8 @@ defmodule WebSockex.Conn do
     ]
   end
 
-
-  defp socket_connection_options(%{socket_options: socket_options}) when not is_nil(socket_options) do
+  defp socket_connection_options(%{socket_options: socket_options})
+       when not is_nil(socket_options) do
     minimal_socket_connection_options()
     |> Keyword.merge(socket_options)
   end
@@ -356,7 +358,6 @@ defmodule WebSockex.Conn do
   defp socket_connection_options(%{socket_options: socket_options}) do
     minimal_socket_connection_options()
   end
-
 
   # Crazy SSL Stuff (It will be normal SSL stuff when I figure out Erlang's ssl)
 
