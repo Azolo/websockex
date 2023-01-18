@@ -7,6 +7,7 @@ defmodule WebSockex.ConnTest do
     on_exit(fn -> WebSockex.TestServer.shutdown(server_ref) end)
 
     uri = URI.parse(url)
+
     conn = WebSockex.Conn.new(uri)
 
     {:ok, conn} = WebSockex.Conn.open_socket(conn)
@@ -14,97 +15,86 @@ defmodule WebSockex.ConnTest do
     [url: url, uri: uri, conn: conn]
   end
 
-  for host <- ["localhost", "127.0.0.1"] do
-    test "new, with host #{host}" do
-      localhost = unquote(host)
+  test "new" do
+    tcp_conn = %WebSockex.Conn{
+      host: "localhost",
+      port: 80,
+      path: "/ws",
+      query: nil,
+      conn_mod: :gen_tcp,
+      transport: :tcp,
+      extra_headers: [{"Pineapple", "Cake"}],
+      socket: nil,
+      socket_connect_timeout: 6000,
+      socket_recv_timeout: 5000
+    }
 
-      localhost_or_addr =
-        case WebSockex.Conn.parse_host(localhost) do
-          addr when is_tuple(addr) -> addr
-          other -> to_string(other)
-        end
+    ssl_conn = %WebSockex.Conn{
+      host: "localhost",
+      port: 443,
+      path: "/ws",
+      query: nil,
+      conn_mod: :ssl,
+      transport: :ssl,
+      extra_headers: [{"Pineapple", "Cake"}],
+      socket: nil,
+      socket_connect_timeout: 6000,
+      socket_recv_timeout: 5000
+    }
 
-      tcp_conn = %WebSockex.Conn{
-        host: localhost_or_addr,
-        port: 80,
-        path: "/ws",
-        query: nil,
-        conn_mod: :gen_tcp,
-        transport: :tcp,
-        extra_headers: [{"Pineapple", "Cake"}],
-        socket: nil,
-        socket_connect_timeout: 6000,
-        socket_recv_timeout: 5000
-      }
+    regular_url = "ws://localhost/ws"
+    regular_uri = URI.parse(regular_url)
 
-      ssl_conn = %WebSockex.Conn{
-        host: localhost_or_addr,
-        port: 443,
-        path: "/ws",
-        query: nil,
-        conn_mod: :ssl,
-        transport: :ssl,
-        extra_headers: [{"Pineapple", "Cake"}],
-        socket: nil,
-        socket_connect_timeout: 6000,
-        socket_recv_timeout: 5000
-      }
+    regular_opts = [
+      extra_headers: [{"Pineapple", "Cake"}],
+      socket_connect_timeout: 123,
+      socket_recv_timeout: 456
+    ]
 
-      regular_url = "ws://" <> localhost <> "/ws"
-      regular_uri = URI.parse(regular_url)
+    assert WebSockex.Conn.new(regular_uri, regular_opts) == %{
+             tcp_conn
+             | socket_connect_timeout: 123,
+               socket_recv_timeout: 456
+           }
 
-      regular_opts = [
-        extra_headers: [{"Pineapple", "Cake"}],
-        socket_connect_timeout: 123,
-        socket_recv_timeout: 456
-      ]
+    assert WebSockex.Conn.new(regular_url, regular_opts) ==
+             WebSockex.Conn.new(regular_uri, regular_opts)
 
-      assert WebSockex.Conn.new(regular_uri, regular_opts) == %{
-               tcp_conn
-               | socket_connect_timeout: 123,
-                 socket_recv_timeout: 456,
-                 host: localhost
+    conn_opts = [extra_headers: [{"Pineapple", "Cake"}]]
+
+    ssl_url = "wss://localhost/ws"
+    ssl_uri = URI.parse(ssl_url)
+    assert WebSockex.Conn.new(ssl_uri, conn_opts) == ssl_conn
+    assert WebSockex.Conn.new(ssl_url, conn_opts) == WebSockex.Conn.new(ssl_uri, conn_opts)
+
+    http_url = "http://localhost/ws"
+    http_uri = URI.parse(http_url)
+    assert WebSockex.Conn.new(http_uri, conn_opts) == tcp_conn
+    assert WebSockex.Conn.new(http_url, conn_opts) == WebSockex.Conn.new(http_uri, conn_opts)
+
+    https_url = "https://localhost/ws"
+    https_uri = URI.parse(https_url)
+    assert WebSockex.Conn.new(https_uri, conn_opts) == ssl_conn
+    assert WebSockex.Conn.new(https_url, conn_opts) == WebSockex.Conn.new(https_uri, conn_opts)
+
+    llama_url = "llama://localhost/ws"
+    llama_conn = URI.parse(llama_url)
+
+    assert WebSockex.Conn.new(llama_conn, conn_opts) ==
+             %WebSockex.Conn{
+               host: "localhost",
+               port: nil,
+               path: "/ws",
+               query: nil,
+               conn_mod: nil,
+               transport: nil,
+               extra_headers: [{"Pineapple", "Cake"}],
+               socket: nil,
+               socket_connect_timeout: 6000,
+               socket_recv_timeout: 5000
              }
 
-      assert WebSockex.Conn.new(regular_url, regular_opts) ==
-               WebSockex.Conn.new(regular_uri, regular_opts)
-
-      conn_opts = [extra_headers: [{"Pineapple", "Cake"}]]
-
-      ssl_url = "wss://" <> localhost <> "/ws"
-      ssl_uri = URI.parse(ssl_url)
-      assert WebSockex.Conn.new(ssl_uri, conn_opts) == %{ssl_conn | host: localhost}
-      assert WebSockex.Conn.new(ssl_url, conn_opts) == WebSockex.Conn.new(ssl_uri, conn_opts)
-
-      http_url = "http://" <> localhost <> "/ws"
-      http_uri = URI.parse(http_url)
-      assert WebSockex.Conn.new(http_uri, conn_opts) == %{tcp_conn | host: localhost}
-      assert WebSockex.Conn.new(http_url, conn_opts) == WebSockex.Conn.new(http_uri, conn_opts)
-
-      https_url = "https://" <> localhost <> "/ws"
-      https_uri = URI.parse(https_url)
-      assert WebSockex.Conn.new(https_uri, conn_opts) == %{ssl_conn | host: localhost}
-      assert WebSockex.Conn.new(https_url, conn_opts) == WebSockex.Conn.new(https_uri, conn_opts)
-
-      llama_url = "llama://" <> localhost <> "/ws"
-      llama_conn = URI.parse(llama_url)
-
-      assert WebSockex.Conn.new(llama_conn, conn_opts) ==
-               %WebSockex.Conn{
-                 host: localhost,
-                 port: nil,
-                 path: "/ws",
-                 query: nil,
-                 conn_mod: nil,
-                 transport: nil,
-                 extra_headers: [{"Pineapple", "Cake"}],
-                 socket: nil,
-                 socket_connect_timeout: 6000,
-                 socket_recv_timeout: 5000
-               }
-
-      assert {:error, %WebSockex.URLError{}} = WebSockex.Conn.new(llama_url, conn_opts)
-    end
+    assert {:error, %WebSockex.URLError{}} = WebSockex.Conn.new(llama_url, conn_opts)
   end
 
   test "parse_url" do
@@ -125,12 +115,6 @@ defmodule WebSockex.ConnTest do
 
     pathless_url = "ws://localhost"
     assert WebSockex.Conn.parse_url(pathless_url) == {:ok, %{URI.parse(pathless_url) | path: "/"}}
-  end
-
-  test "parse_host" do
-    assert WebSockex.Conn.parse_host("strawberry.cake") == 'strawberry.cake'
-    assert WebSockex.Conn.parse_host("1.2.3.4") == {1, 2, 3, 4}
-    assert WebSockex.Conn.parse_host("a.b.c.d") == 'a.b.c.d'
   end
 
   test "open_socket", context do
