@@ -1,3 +1,7 @@
+## In-Tree
+### Breaking Changes
+- Requires Elixir version 1.7+ due to changes in Stacktrace
+
 ## 0.4.3
 ### Enhancements
 - Added `ssl_options` documentation
