@@ -23,7 +23,8 @@ defmodule WebSockex.Conn do
             cacerts: nil,
             insecure: true,
             resp_headers: [],
-            ssl_options: nil
+            ssl_options: nil,
+            socket_options: nil
 
   @type socket :: :gen_tcp.socket() | :ssl.sslsocket()
   @type header :: {field :: String.t(), value :: String.t()}
@@ -47,6 +48,7 @@ defmodule WebSockex.Conn do
   - `:socket_recv_timeout` - Timeout in ms for receiving a HTTP response header
     from socket, default #{@socket_recv_timeout_default} ms.
   - `:ssl_options` - extra options for an SSL connection
+  - `:socket_options` - extra options for the TCP part of the connection
 
   [public_key]: http://erlang.org/doc/apps/public_key/using_public_key.html
   """
@@ -57,6 +59,7 @@ defmodule WebSockex.Conn do
           | {:socket_connect_timeout, non_neg_integer}
           | {:socket_recv_timeout, non_neg_integer}
           | {:ssl_options, [:ssl.tls_client_option()]}
+          | {:socket_options, [:gen_tcp.option()]}
 
   @type t :: %__MODULE__{
           conn_mod: :gen_tcp | :ssl,
@@ -95,7 +98,8 @@ defmodule WebSockex.Conn do
       socket_connect_timeout:
         Keyword.get(opts, :socket_connect_timeout, @socket_connect_timeout_default),
       socket_recv_timeout: Keyword.get(opts, :socket_recv_timeout, @socket_recv_timeout_default),
-      ssl_options: Keyword.get(opts, :ssl_options, nil)
+      ssl_options: Keyword.get(opts, :ssl_options, nil),
+      socket_options: Keyword.get(opts, :socket_options, nil)
     }
   end
 
@@ -133,6 +137,26 @@ defmodule WebSockex.Conn do
   end
 
   @doc """
+  Parses a URI host
+  Host can be "x.y.z.t" or "some.name.domain". If "x.y.z.t", the function
+  will return a valid :inet.ip_address() which __MODULE__.open_socket
+  accepts. This will prevent extra DNS operations which can time out
+  in some contexts
+  """
+  @spec parse_host(String.t()) :: charlist() | :inet.ip_address()
+  def parse_host(host) do
+    parsed =
+      host
+      |> to_charlist()
+      |> :inet.parse_address()
+
+    case parsed do
+      {:error, :einval} -> to_charlist(host)
+      {:ok, addr} -> addr
+    end
+  end
+
+  @doc """
   Sends data using the `conn_mod` module.
   """
   @spec socket_send(__MODULE__.t(), binary) :: :ok | {:error, reason :: term}
@@ -151,9 +175,9 @@ defmodule WebSockex.Conn do
 
   def open_socket(%{conn_mod: :gen_tcp} = conn) do
     case :gen_tcp.connect(
-           String.to_charlist(conn.host),
+           parse_host(conn.host),
            conn.port,
-           [:binary, active: false, packet: 0],
+           socket_connection_options(conn),
            conn.socket_connect_timeout
          ) do
       {:ok, socket} ->
@@ -166,7 +190,7 @@ defmodule WebSockex.Conn do
 
   def open_socket(%{conn_mod: :ssl} = conn) do
     case :ssl.connect(
-           String.to_charlist(conn.host),
+           parse_host(conn.host),
            conn.port,
            ssl_connection_options(conn),
            conn.socket_connect_timeout
@@ -315,6 +339,24 @@ defmodule WebSockex.Conn do
       {:ok, :http_eoh, body} ->
         {:ok, headers, body}
     end
+  end
+
+  defp minimal_socket_connection_options() do
+    [
+      mode: :binary,
+      active: false,
+      packet: 0
+    ]
+  end
+
+  defp socket_connection_options(%{socket_options: socket_options})
+       when not is_nil(socket_options) do
+    minimal_socket_connection_options()
+    |> Keyword.merge(socket_options)
+  end
+
+  defp socket_connection_options(%{socket_options: socket_options}) do
+    minimal_socket_connection_options()
   end
 
   # Crazy SSL Stuff (It will be normal SSL stuff when I figure out Erlang's ssl)
