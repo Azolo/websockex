@@ -13,6 +13,7 @@ defmodule WebSockex.Mixfile do
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       package: package(),
+      dialyzer: dialyzer(),
       deps: deps(),
       docs: docs()
     ]
@@ -37,6 +38,8 @@ defmodule WebSockex.Mixfile do
       {:ex_doc, "~> 0.27", only: :dev, runtime: false},
       {:cowboy, "~> 2.9", only: :test},
       {:plug_cowboy, "~> 2.5", only: :test},
+      {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:plug, "~> 1.12", only: :test}
     ] ++ optional_deps(otp_release())
   end
@@ -64,5 +67,14 @@ defmodule WebSockex.Mixfile do
 
   defp otp_release do
     :erlang.system_info(:otp_release) |> to_string() |> String.to_integer()
+  end
+
+  defp dialyzer do
+    [
+      ignore_warnings: ".dialyzer_ignore.exs",
+      plt_add_apps: [:mix, :eex],
+      plt_core_path: "priv/plts",
+      plt_file: {:no_warn, "priv/plts/websockex.plt"}
+    ]
   end
 end
