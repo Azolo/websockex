@@ -391,13 +391,13 @@ defmodule WebSockex.Frame do
 
   for x <- 1..3 do
     defp mask(<<key::8*unquote(x), _::binary>>, <<part::8*unquote(x)>>, acc) do
-      masked = bxor(part, key)
+      masked = Bitwise.bxor(part, key)
       <<acc::binary, masked::8*unquote(x)>>
     end
   end
 
   defp mask(<<key::32>> = key_bin, <<part::8*4, rest::binary>>, acc) do
-    masked = bxor(part, key)
+    masked = Bitwise.bxor(part, key)
     mask(key_bin, rest, <<acc::binary, masked::8*4>>)
   end
 end
