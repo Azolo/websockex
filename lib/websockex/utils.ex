@@ -1,6 +1,8 @@
 defmodule WebSockex.Utils do
   @moduledoc false
 
+  Code.ensure_loaded(:sys)
+
   # OTP
 
   def otp_release do
@@ -80,6 +82,12 @@ defmodule WebSockex.Utils do
 
   def sys_debug(debug, event, state) do
     :sys.handle_debug(debug, &print_event/3, state, event)
+  end
+
+  if function_exported?(:sys, :get_log, 1) do
+    def sys_log(debug), do: :sys.get_log(debug)
+  else
+    def sys_log(debug), do: :sys.get_debug(:log, debug, [])
   end
 
   defp print_event(io_dev, {:in, :frame, frame}, %{name: name}) do

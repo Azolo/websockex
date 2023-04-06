@@ -3,7 +3,7 @@ defmodule WebSockex.Frame do
   Functions for parsing and encoding frames.
   """
 
-  @otp_vesion System.otp_release() |> Integer.parse() |> elem(0)
+  import Bitwise
 
   @type opcode :: :text | :binary | :close | :ping | :pong
   @type close_code :: 1000..4999
@@ -283,7 +283,7 @@ defmodule WebSockex.Frame do
 
   # Encode Close Frames
   def encode_frame({:close, close_code, <<payload::binary>>})
-      when not (close_code in 1000..4999) do
+      when close_code not in 1000..4999 do
     {:error,
      %WebSockex.FrameEncodeError{
        reason: :close_code_out_of_range,
@@ -391,19 +391,13 @@ defmodule WebSockex.Frame do
 
   for x <- 1..3 do
     defp mask(<<key::8*unquote(x), _::binary>>, <<part::8*unquote(x)>>, acc) do
-      masked = xor(part, key)
+      masked = bxor(part, key)
       <<acc::binary, masked::8*unquote(x)>>
     end
   end
 
   defp mask(<<key::32>> = key_bin, <<part::8*4, rest::binary>>, acc) do
-    masked = xor(part, key)
+    masked = bxor(part, key)
     mask(key_bin, rest, <<acc::binary, masked::8*4>>)
-  end
-
-  if @otp_vesion >= 24 do
-    defp xor(a, b), do: Bitwise.bxor(a, b)
-  else
-    defp xor(a, b), do: Bitwise.^^^(a, b)
   end
 end

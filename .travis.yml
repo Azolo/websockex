@@ -1,14 +1,14 @@
 language: elixir
-elixir: 1.4.2
-otp_release: 19.3
+elixir: 1.13.2
+otp_release: 24.2
 sudo: false
 matrix:
   include:
-    - elixir: 1.4.5
-      otp_release: 19.3
-    - elixir: 1.5.3
-      otp_release: 20.3
-    - elixir: 1.6.6
-      otp_release: 20.3
-    - elixir: 1.7.3
-      otp_release: 21.0
+    - elixir: 1.10.3
+      otp_release: 21.3
+    - elixir: 1.11.4
+      otp_release: 24.2
+    - elixir: 1.12.3
+      otp_release: 24.0
+    - elixir: 1.13.2
+      otp_release: 24.2
