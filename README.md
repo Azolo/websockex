@@ -126,7 +126,7 @@ For all these events, the measurements is `%{time: System.system_time()}` and th
 Usually you'll want to negotiate and handle any abnormal close event or error leading to it, as per WS Spec, but there might be cases where you simply want the socket to exit as if it was a normal event, even if it was abruptly closed or another exception was raised. In those cases you can define the terminate callback and return `exit(:normal)` from it.
 ```elixir
 def terminate(reason, state) do
-    IO.puts(\nSocket Terminating:\n#{inspect reason}\n\n#{inspect state}\n")
+    IO.puts("\nSocket Terminating:\n#{inspect reason}\n\n#{inspect state}\n")
     exit(:normal)
 end
 ```
